@@ -245,6 +245,7 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 .mbg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
 .mbg.open{display:flex}
 .mbox{background:var(--surf);border-radius:var(--r);padding:24px;width:520px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:var(--sh-lg)}
+.mbox-lg{width:600px}
 .mbox h3{font-size:17px;font-weight:700;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)}
 .mfoot{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
 
@@ -325,6 +326,11 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 .bc-cell{background:var(--surf2);border-radius:6px;padding:10px 12px;text-align:center}
 .bc-cell .bc-val{font-size:18px;font-weight:700;line-height:1.2}
 .bc-cell .bc-lbl{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
+
+/* ── Budget KPI 5-koloms ─────────────────── */
+.bud-kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:0}
+.bud-kpi-grid>div{padding:18px 20px;border-right:1px solid rgba(255,255,255,.08)}
+.bud-kpi-grid>div:last-child{border-right:none}
 
 /* ── Nog te betalen banner ───────────────── */
 .betalen-banner{background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--r);padding:16px 20px;margin-bottom:14px}
@@ -409,6 +415,12 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 
   /* ── Ruimtes ────────────────────────────── */
   .rgrid{grid-template-columns:1fr}
+
+  /* ── Budget KPI grid — 2 kolommen op mobiel ─ */
+  .bud-kpi-grid{grid-template-columns:1fr 1fr}
+  .bud-kpi-grid>div{border-right:none!important;border-bottom:1px solid rgba(255,255,255,.08);padding:14px 16px}
+  .bud-kpi-grid>div:last-child{border-bottom:none;grid-column:1/-1}
+  .bud-kpi-grid .bt-num{font-size:22px}
 
   /* ── Budget totaal — 2 kolommen ─────────── */
   .bud-total-grid{grid-template-columns:1fr 1fr!important}
@@ -570,7 +582,7 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 </div></div>
 
 <!-- Kostenpost -->
-<div class="mbg" id="m-kost"><div class="mbox" style="width:600px">
+<div class="mbg" id="m-kost"><div class="mbox mbox-lg">
   <h3 id="m-kost-title">Kostenpost toevoegen</h3>
   <input type="hidden" id="kost-id">
 
@@ -1556,14 +1568,14 @@ function deleteFase(){
 const CATS={ruwbouw:'Ruwbouw',installaties:'Installaties',afwerking:'Afwerking',overig:'Overig'};
 function renderRuimtes(){
   let h=`<div class="shd"><h2>Ruimtes</h2>
-    <div class="fca g8" style="flex-wrap:wrap">
-      <button class="btn btn-ghost btn-sm" onclick="toggleAllRuimtes(false)">Inklappen</button>
-      <button class="btn btn-ghost btn-sm" onclick="toggleAllRuimtes(true)">Uitklappen</button>
-      <button class="btn btn-ghost btn-sm ${_bulkMode?'btn-p':''}" onclick="toggleBulkMode()" style="${_bulkMode?'background:var(--acc);color:white':''}">
-        ${_bulkMode?'✓ Selectie uit':'☑ Selecteer'}
-      </button>
-      <button class="btn btn-p btn-sm" onclick="openModal('m-ruimte')">+ Ruimte</button>
-    </div>
+    <button class="btn btn-p btn-sm" onclick="openModal('m-ruimte')">+ Ruimte</button>
+  </div>
+  <div class="fca g8 mb12" style="flex-wrap:wrap">
+    <button class="btn btn-ghost btn-sm" onclick="toggleAllRuimtes(false)">Inklappen</button>
+    <button class="btn btn-ghost btn-sm" onclick="toggleAllRuimtes(true)">Uitklappen</button>
+    <button class="btn btn-ghost btn-sm ${_bulkMode?'btn-p':''}" onclick="toggleBulkMode()" style="${_bulkMode?'background:var(--acc);color:white':''}">
+      ${_bulkMode?'✓ Stop selectie':'☑ Selecteer taken'}
+    </button>
   </div>
   <div class="rgrid">`;
 
@@ -1889,17 +1901,17 @@ function renderBudget(){
   // Rekensom: Uitgaven − Subsidies = Netto → vergelijk met Budget → Verschil
   const nettoUitgaven = basisBesteed + meerwerkKosten; // voor subsidies
   h+=`<div class="bud-total mb16">
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0">
+    <div class="bud-kpi-grid">
 
       <!-- 1: Totaalbudget -->
-      <div style="padding:18px 20px;border-right:1px solid rgba(255,255,255,.08)">
+      <div class="bud-kpi-col">
         <div class="bt-label">Totaalbudget</div>
         <div class="bt-num">${fmt(basisBudget)}</div>
         <button class="btn btn-sm mt8" style="background:rgba(255,255,255,.1);color:#e2e8f0;border:1px solid rgba(255,255,255,.2);font-size:11px" onclick="openModalNaam()">Aanpassen</button>
       </div>
 
       <!-- 2: Totaal uitgaven (incl. meerwerk, vóór subsidies) -->
-      <div style="padding:18px 20px;border-right:1px solid rgba(255,255,255,.08)">
+      <div class="bud-kpi-col">
         <div class="bt-label">Totaal uitgaven</div>
         <div class="bt-num">${fmt(nettoUitgaven)}</div>
         <div class="bt-sub">
@@ -1909,7 +1921,7 @@ function renderBudget(){
       </div>
 
       <!-- 3: Subsidies / kortingen -->
-      <div style="padding:18px 20px;border-right:1px solid rgba(255,255,255,.08)">
+      <div class="bud-kpi-col">
         <div class="bt-label">Subsidies & kortingen</div>
         <div class="bt-num" style="color:${subsidieTotal?'#86efac':'#94a3b8'}">
           ${subsidieTotal?`− ${fmt(subsidieTotal)}`:'—'}
@@ -1918,7 +1930,7 @@ function renderBudget(){
       </div>
 
       <!-- 4: Verschil (over/resterend) -->
-      <div style="padding:18px 20px;border-right:1px solid rgba(255,255,255,.08)">
+      <div class="bud-kpi-col">
         <div class="bt-label">${isOver?'Over budget':'Resterend'}</div>
         <div class="bt-num" style="color:${isOver?'#fca5a5':'#86efac'}">
           ${isOver?'− '+fmt(-verschil):'+'+fmt(verschil)}
@@ -1927,7 +1939,7 @@ function renderBudget(){
       </div>
 
       <!-- 5: Nog te betalen -->
-      <div style="padding:18px 20px">
+      <div class="bud-kpi-col" style="border-right:none">
         <div class="bt-label">Nog te betalen</div>
         <div class="bt-num" style="color:${nogTeBetalen>0?'#fca5a5':'#86efac'}">
           ${fmt(nogTeBetalen)}
@@ -2201,7 +2213,7 @@ function kostTypeChange(){
 function openKostModal(id,rid,type){
   document.getElementById('m-kost-title').textContent=id?'Kostenpost bewerken':'Kostenpost toevoegen';
   ['kost-id','kost-naam','kost-bedrag','kost-notitie'].forEach(x=>document.getElementById(x)&&(document.getElementById(x).value=''));
-  document.getElementById('kost-btw').value='21';
+  document.getElementById('kost-btw').value='0';
   document.getElementById('kost-btw-incl').value='incl';
   document.getElementById('kost-btw-preview').style.display='none';
   document.getElementById('kost-del-btn').style.display='none';
@@ -2541,7 +2553,7 @@ const _svgLoaded = {};
 
 function renderPlattegronden() {
   let h = `<div class="shd"><h2>Plattegronden</h2>
-    <span class="sl">Scroll of pinch om in te zoomen · Klik en sleep om te bewegen</span>
+    <span class="sl" style="display:none" id="platte-hint">Scroll of pinch om in te zoomen · Klik en sleep om te bewegen</span>
   </div>`;
 
   PLATTEGRONDEN.forEach(p => {
