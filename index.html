@@ -1,0 +1,2872 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Renovatie Planner</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+:root{
+  --bg:#f1f5f9;--surf:#fff;--surf2:#f8fafc;
+  --border:#e2e8f0;--border2:#cbd5e1;
+  --hdr:#0f172a;--hdr2:#1e293b;
+  --acc:#d97706;--acc-lt:#fef3c7;--acc-dk:#b45309;
+  --txt:#0f172a;--mut:#64748b;--mut2:#94a3b8;
+  --grn:#059669;--grn-lt:#d1fae5;
+  --red:#dc2626;--red-lt:#fee2e2;
+  --org:#ea580c;--org-lt:#ffedd5;
+  --blu:#2563eb;--blu-lt:#dbeafe;
+  --r:10px;--rsm:6px;
+  --sh:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --sh-md:0 4px 6px -1px rgba(0,0,0,.07),0 2px 4px -1px rgba(0,0,0,.04);
+  --sh-lg:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -2px rgba(0,0,0,.05);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5;min-height:100vh}
+
+/* ── Header ─────────────────────────────── */
+#hdr{background:var(--hdr);color:#fff;height:56px;display:flex;align-items:center;padding:0 24px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#hdr .logo{font-size:16px;font-weight:700;letter-spacing:-.3px;color:#fff;display:flex;align-items:center;gap:10px}
+#hdr .logo-icon{width:28px;height:28px;background:var(--acc);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:15px}
+#hdr .proj{font-size:12px;color:#94a3b8;margin-left:6px;cursor:pointer;padding:2px 8px;border-radius:4px;transition:background .15s}
+#hdr .proj:hover{background:rgba(255,255,255,.08);color:#e2e8f0}
+#hdr .hdr-right{display:flex;gap:8px;align-items:center;margin-left:auto}
+
+/* ── Nav ─────────────────────────────────── */
+#nav{background:var(--hdr2);display:flex;padding:0 24px;position:sticky;top:56px;z-index:99;gap:0;border-bottom:1px solid rgba(255,255,255,.06)}
+#nav button{background:none;border:none;border-bottom:2px solid transparent;padding:13px 18px;cursor:pointer;font-size:13px;color:#94a3b8;transition:all .15s;margin-bottom:-1px;white-space:nowrap;font-family:inherit;font-weight:500}
+#nav button:hover{color:#e2e8f0}
+#nav button.act{color:#fff;border-bottom-color:var(--acc);font-weight:600}
+.nb{background:var(--red);color:#fff;border-radius:9px;padding:0 5px;font-size:10px;margin-left:5px;vertical-align:middle;line-height:16px;display:inline-block;font-weight:700}
+.nb-acc{background:var(--acc);color:#fff}
+
+/* ── Main ────────────────────────────────── */
+#main{padding:24px;max-width:1280px;margin:0 auto}
+.tab{display:none}.tab.act{display:block}
+
+/* ── Cards ───────────────────────────────── */
+.card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:20px;box-shadow:var(--sh)}
+.card-sm{padding:16px}
+.ctitle{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mut2);margin-bottom:12px}
+
+/* ── Grid ────────────────────────────────── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+
+/* ── Typography utils ───────────────────── */
+.bignum{font-size:28px;font-weight:800;line-height:1;letter-spacing:-.5px}
+.num-md{font-size:20px;font-weight:700}
+.sl{font-size:11px;color:var(--mut)}
+.mt4{margin-top:4px}.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}.mt20{margin-top:20px}.mt24{margin-top:24px}
+.mb4{margin-bottom:4px}.mb8{margin-bottom:8px}.mb12{margin-bottom:12px}.mb16{margin-bottom:16px}
+.flex{display:flex}.fca{display:flex;align-items:center}.fb{display:flex;justify-content:space-between;align-items:center}
+.g6{gap:6px}.g8{gap:8px}.g10{gap:10px}.g12{gap:12px}.g16{gap:16px}
+.mut{color:var(--mut)}.grn{color:var(--grn)}.red{color:var(--red)}.org{color:var(--org)}.acc{color:var(--acc)}.blu{color:var(--blu)}
+.bold{font-weight:600}.bolder{font-weight:700}
+
+/* ── Progress ─────────────────────────────── */
+.pbar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.pbar-lg{height:8px}
+.pfill{height:100%;border-radius:3px;transition:width .4s ease}
+.pf-grn{background:var(--grn)}.pf-org{background:var(--org)}.pf-red{background:var(--red)}.pf-acc{background:var(--acc)}.pf-blu{background:var(--blu)}.pf-mut{background:var(--border2)}
+
+/* ── Buttons ─────────────────────────────── */
+.btn{border:none;border-radius:var(--rsm);padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;font-family:inherit;line-height:1.4;display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:var(--acc);color:#fff}.btn-p:hover{background:var(--acc-dk)}
+.btn-dark{background:var(--hdr2);color:#fff}.btn-dark:hover{background:var(--hdr)}
+.btn-g{background:var(--surf);border:1px solid var(--border);color:var(--txt)}.btn-g:hover{border-color:var(--border2);background:var(--surf2)}
+.btn-ghost{background:transparent;color:var(--mut)}.btn-ghost:hover{background:var(--surf2);color:var(--txt)}
+.btn-d{background:var(--red);color:#fff}.btn-d:hover{filter:brightness(.9)}
+.btn-sm{padding:5px 12px;font-size:12px}.btn-xs{padding:3px 9px;font-size:11px;border-radius:4px}
+.ibtn{background:none;border:none;cursor:pointer;color:var(--mut);padding:4px 7px;border-radius:var(--rsm);font-size:14px;transition:all .15s;font-family:inherit}
+.ibtn:hover{background:var(--surf2);color:var(--acc)}
+/* Status toggle buttons */
+.stbtn{border:1px solid var(--border);background:var(--surf);color:var(--mut);border-radius:4px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit}
+.stbtn:hover{border-color:var(--border2)}
+.stbtn.st-gepland.on{background:var(--blu-lt);color:var(--blu);border-color:var(--blu)}
+.stbtn.st-bezig.on{background:var(--org-lt);color:var(--org);border-color:var(--org)}
+.stbtn.st-afgerond.on{background:var(--grn-lt);color:var(--grn);border-color:var(--grn)}
+.stbtn.st-open.on{background:var(--red-lt);color:var(--red);border-color:var(--red)}
+.stbtn.st-behandeling.on{background:var(--org-lt);color:var(--org);border-color:var(--org)}
+.stbtn.st-besloten.on{background:var(--grn-lt);color:var(--grn);border-color:var(--grn)}
+
+/* ── Forms ───────────────────────────────── */
+.ff{margin-bottom:14px}
+.ff label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;font-weight:500}
+input[type=text],input[type=number],input[type=url],input[type=date],textarea,select{
+  width:100%;border:1px solid var(--border);border-radius:var(--rsm);padding:8px 12px;
+  font-size:13px;background:var(--surf);color:var(--txt);font-family:inherit;transition:border-color .15s}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px rgba(217,119,6,.1)}
+input[type=checkbox]{width:auto;cursor:pointer;width:15px;height:15px;flex-shrink:0;margin-top:2px;accent-color:var(--acc)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+textarea{resize:vertical;min-height:72px}
+.frow{display:flex;gap:12px}.frow>*{flex:1}
+select option{font-size:13px}
+
+/* ── Tags ────────────────────────────────── */
+.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600}
+.t-laag{background:#f0fdf4;color:#15803d}.t-normaal{background:var(--blu-lt);color:var(--blu)}.t-hoog{background:var(--red-lt);color:var(--red)}
+.t-open{background:var(--red-lt);color:var(--red)}.t-behandeling{background:var(--org-lt);color:var(--org)}.t-besloten{background:var(--grn-lt);color:var(--grn)}
+.t-gepland{background:var(--blu-lt);color:var(--blu)}.t-bezig{background:var(--org-lt);color:var(--org)}.t-afgerond{background:var(--grn-lt);color:var(--grn)}
+.t-urgent{background:#fff7ed;color:#c2410c;border:1px solid #fdba74}
+
+/* ── Section header ─────────────────────── */
+.shd{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.shd h2{font-size:20px;font-weight:700;color:var(--txt)}
+hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+
+/* ── KPI cards ───────────────────────────── */
+.kpi{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:20px;box-shadow:var(--sh);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.kpi-acc::before{background:var(--acc)}
+.kpi-red::before{background:var(--red)}
+.kpi-grn::before{background:var(--grn)}
+.kpi-blu::before{background:var(--blu)}
+.kpi-org::before{background:var(--org)}
+.kpi-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mut2);margin-bottom:8px}
+.kpi-val{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1}
+.kpi-sub{font-size:12px;color:var(--mut);margin-top:6px}
+
+/* ── Gantt ───────────────────────────────── */
+.gantt-wrap{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.gantt-toolbar{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surf2)}
+.tgrp{display:flex;border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden;background:var(--surf)}
+.tgrp button{border:none;padding:6px 14px;cursor:pointer;font-size:12px;background:transparent;color:var(--mut);font-family:inherit;font-weight:500;transition:all .15s}
+.tgrp button.act{background:var(--hdr2);color:#fff;font-weight:600}
+.gnav{display:flex;gap:4px;align-items:center}
+.gnav button{background:var(--surf);border:1px solid var(--border);border-radius:var(--rsm);padding:5px 10px;cursor:pointer;font-size:13px;color:var(--mut);transition:all .15s}
+.gnav button:hover{border-color:var(--border2);color:var(--txt)}
+.gnav .week-info{font-size:12px;color:var(--mut);padding:0 8px;white-space:nowrap}
+.gantt-inner{padding:0 20px 16px;overflow-x:auto}
+.ghd{display:flex;padding:10px 0 6px;border-bottom:2px solid var(--border);margin-bottom:0}
+.gl{width:220px;flex-shrink:0;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.gr{width:110px;flex-shrink:0;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.gst{width:120px;flex-shrink:0;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.gprog{width:44px;flex-shrink:0;font-size:11px;color:var(--mut);font-weight:700;text-align:right;padding-right:12px;text-transform:uppercase;letter-spacing:.4px}
+.gtl{flex:1;display:flex;min-width:0}
+.gcol{flex:1;text-align:center;font-size:10px;color:var(--mut2);user-select:none;min-width:0;padding:0 1px;white-space:nowrap;overflow:hidden}
+.gcol.curr{color:var(--red);font-weight:700}
+.grow{display:flex;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);transition:background .1s}
+.grow:hover{background:#fafafa}
+.grow:last-child{border-bottom:none}
+.grow-l{width:220px;flex-shrink:0}
+.grow-l .gname{font-size:13px;font-weight:600;color:var(--txt)}
+.grow-l .gsub{font-size:11px;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
+.grow-r{width:110px;flex-shrink:0;font-size:12px;color:var(--mut)}
+.grow-st{width:120px;flex-shrink:0}
+.grow-prog{width:44px;flex-shrink:0;font-size:12px;font-weight:700;text-align:right;padding-right:12px}
+.grow-cells{flex:1;position:relative;height:30px;min-width:0}
+.gbg{position:absolute;top:0;bottom:0;border-right:1px solid var(--border);pointer-events:none}
+.gcurr-line{position:absolute;top:0;bottom:0;width:2px;background:var(--red);opacity:.4;pointer-events:none;z-index:2}
+.gbar{position:absolute;height:22px;top:4px;border-radius:5px;display:flex;align-items:center;padding:0 8px;font-size:11px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;cursor:pointer;transition:filter .15s;z-index:1}
+.gbar:hover{filter:brightness(.88)}
+.gbar.gepland{background:var(--blu)}.gbar.bezig{background:var(--acc)}.gbar.afgerond{background:var(--grn)}
+.g-out-left{left:0!important;padding-left:16px}.g-out-right{right:0!important}
+
+/* ── Ruimtes ─────────────────────────────── */
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+.rcard{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;transition:box-shadow .2s}
+.rcard:hover{box-shadow:var(--sh-md)}
+.rhd{padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--border);background:var(--surf);cursor:pointer;user-select:none}
+.rhd .rname{font-size:15px;font-weight:700}
+.rhd .ri{font-size:12px;color:var(--mut);margin-top:2px}
+.rbody{padding:14px 16px;display:none}
+.rbody.open{display:block}
+
+/* Priority border */
+.ci{display:flex;align-items:flex-start;gap:10px;padding:8px 0 8px 8px;border-bottom:1px solid var(--border);border-left:3px solid transparent;margin-left:-8px;transition:background .1s}
+.ci:last-child{border-bottom:none}
+.ci:hover{background:var(--surf2);border-radius:0 6px 6px 0}
+.ci.prio-hoog{border-left-color:var(--red)}
+.ci.prio-normaal{border-left-color:var(--blu)}
+.ci.prio-laag{border-left-color:var(--border2)}
+.ci.done .cin{text-decoration:line-through;color:var(--mut)}
+.ci.done{opacity:.6}
+.cim{flex:1;min-width:0}
+.cin{font-size:13px;line-height:1.4;font-weight:500}
+.cimeta{display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap}
+.cinote{font-size:11px;color:var(--mut);font-style:italic;display:flex;align-items:center;gap:3px}
+.ciactie{font-size:11px;color:var(--red);font-weight:700;background:var(--red-lt);padding:2px 7px;border-radius:6px;display:flex;align-items:center;gap:3px}
+
+/* Category group */
+.cat-group{margin-bottom:4px}
+.cat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mut2);padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:2px}
+
+/* Acties banner in ruimte */
+.acties-banner{background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--rsm);padding:10px 12px;margin-bottom:12px}
+.acties-banner .ab-title{font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+.acties-banner .ab-item{font-size:12px;color:var(--red);padding:2px 0;display:flex;align-items:center;gap:6px}
+
+/* ── Budget ──────────────────────────────── */
+.bud-total{background:var(--hdr);color:#fff;border-radius:var(--r);padding:24px;box-shadow:var(--sh-md);margin-bottom:16px}
+.bud-total .bt-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;margin-bottom:6px}
+.bud-total .bt-num{font-size:36px;font-weight:800;letter-spacing:-1.5px;line-height:1;color:#fff}
+.bud-total .bt-sub{font-size:13px;color:#94a3b8;margin-top:6px}
+.bbar-outer{height:10px;background:rgba(255,255,255,.15);border-radius:5px;overflow:hidden;margin:14px 0 8px}
+.bbar-fill{height:100%;border-radius:5px;transition:width .4s ease}
+.bseg-wrap{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:14px 0 8px}
+.bseg{height:100%;transition:flex .4s;min-width:0}
+.bs-r{background:#f59e0b}.bs-a{background:#3b82f6}.bs-m{background:#ef4444}.bs-v{background:rgba(255,255,255,.15)}
+.bud-section{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;margin-bottom:14px}
+.bud-sec-hd{padding:14px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);background:var(--surf2);cursor:pointer}
+.bud-sec-hd h3{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.bud-sec-body{padding:14px 18px;display:none}
+.bud-sec-body.open{display:block}
+.kost-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:var(--rsm);font-size:13px;transition:background .1s}
+.kost-row:hover{background:var(--surf2)}
+.meerwerk-block{background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--r);padding:20px;margin-bottom:14px}
+.meerwerk-block .mb-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--org);margin-bottom:8px}
+.ovr-banner{background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--rsm);padding:10px 14px;margin-bottom:12px;color:var(--red);font-size:13px;font-weight:600}
+
+/* ── Beslissingen ─────────────────────────── */
+.bes-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden;transition:box-shadow .2s;margin-bottom:10px}
+.bes-card:hover{box-shadow:var(--sh-md)}
+.bes-inner{padding:14px 18px}
+.bes-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px}
+.bes-desc{font-size:14px;font-weight:600;flex:1;color:var(--txt)}
+.bes-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.bes-blok{font-size:12px;color:var(--org);display:flex;align-items:center;gap:4px}
+.bes-deadline{font-size:12px;color:var(--mut);display:flex;align-items:center;gap:4px}
+.bes-note{font-size:12px;color:var(--mut);margin-top:8px;padding:8px 12px;background:var(--surf2);border-radius:var(--rsm);border-left:3px solid var(--border2);font-style:italic}
+.bes-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.bes-urgent{border-color:#fca5a5;background:#fff}
+.bes-urgent .bes-inner{background:linear-gradient(135deg,#fff7f7 0%,#fff 50%)}
+
+/* ── Docs ────────────────────────────────── */
+.ditem{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.ditem:last-child{border-bottom:none}
+.ditem a{color:var(--blu);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ditem a:hover{text-decoration:underline;color:var(--acc)}
+
+/* ── Modal ───────────────────────────────── */
+.mbg{display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.mbg.open{display:flex}
+.mbox{background:var(--surf);border-radius:var(--r);padding:24px;width:520px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:var(--sh-lg)}
+.mbox h3{font-size:17px;font-weight:700;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+
+/* ── Toast ───────────────────────────────── */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--hdr);color:#fff;padding:12px 20px;border-radius:8px;font-size:13px;z-index:999;display:none;box-shadow:var(--sh-lg);animation:fuap .25s ease}
+@keyframes fuap{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.empty{text-align:center;padding:36px 20px;color:var(--mut)}
+.empty .ei{font-size:40px;margin-bottom:12px}
+.empty p{font-size:14px}
+
+/* ── Tooltip ─────────────────────────────── */
+.has-tooltip{position:relative}
+.tooltip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--hdr);color:#fff;padding:8px 12px;border-radius:6px;font-size:12px;white-space:nowrap;z-index:50;pointer-events:none;box-shadow:var(--sh-md);line-height:1.5}
+.tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--hdr)}
+.has-tooltip:hover .tooltip{display:block}
+
+/* ── Misc ─────────────────────────────────── */
+.divider{border:none;border-top:1px solid var(--border);margin:14px 0}
+.badge-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.inline-edit{background:none;border:none;font-family:inherit;font-size:inherit;color:inherit;width:100%;cursor:text;padding:0}
+.inline-edit:focus{outline:1px dashed var(--acc);border-radius:2px}
+
+/* ── Search ──────────────────────────────── */
+.sr-group{padding:8px 0;border-bottom:1px solid var(--border)}
+.sr-group:last-child{border-bottom:none}
+.sr-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mut2);padding:6px 14px 4px}
+.sr-item{padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:10px;transition:background .1s}
+.sr-item:hover{background:var(--surf2)}
+.sr-item .sri-title{font-size:13px;font-weight:500;flex:1}
+.sr-item .sri-sub{font-size:11px;color:var(--mut)}
+.sr-empty{padding:20px;text-align:center;color:var(--mut);font-size:13px}
+
+/* ── Bulk selection ──────────────────────── */
+.ci-check{width:18px;height:18px;flex-shrink:0;accent-color:var(--acc);cursor:pointer;margin-top:1px}
+.ci.bulk-selected{background:var(--acc-lt)!important;border-left-color:var(--acc)!important}
+#bulk-bar{display:none}
+#bulk-bar.show{display:flex!important}
+
+/* ── Betaalstatus badges ─────────────────── */
+.t-betaald{background:var(--grn-lt);color:var(--grn)}
+.t-openstaand{background:var(--red-lt);color:var(--red)}
+.t-deelbetaling{background:var(--org-lt);color:var(--org)}
+
+/* ── Lifecycle ───────────────────────────── */
+.t-raming{background:#f1f5f9;color:#64748b}
+.t-offerte{background:var(--blu-lt);color:var(--blu)}
+.t-factuur{background:var(--org-lt);color:var(--org)}
+.stbtn.st-raming.on{background:#f1f5f9;color:#334155;border-color:#94a3b8}
+.stbtn.st-offerte.on{background:var(--blu-lt);color:var(--blu);border-color:var(--blu)}
+.stbtn.st-factuur.on{background:var(--org-lt);color:var(--org);border-color:var(--org)}
+
+/* ── Termijnen ───────────────────────────── */
+.termijn-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.termijn-row input{font-size:12px;padding:5px 8px}
+
+/* ── Cashflow ────────────────────────────── */
+.cf-month{margin-bottom:14px}
+.cf-month-hd{font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:6px}
+.cf-row{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:6px;font-size:13px;transition:background .1s}
+.cf-row:hover{background:var(--surf2)}
+.cf-row.cf-paid{opacity:.55}
+.cf-row .cf-info{flex:1;min-width:0}
+.cf-row .cf-name{font-weight:500}
+.cf-row .cf-sub{font-size:11px;color:var(--mut)}
+.cf-row .cf-amt{font-weight:700;white-space:nowrap}
+
+/* ── Ruimte verdeling ────────────────────── */
+.verd-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
+.verd-row input[type=number]{width:72px;flex-shrink:0;text-align:right}
+
+/* ── Item notitie display ─────────────────── */
+.item-notitie{font-size:11px;color:var(--mut);margin-top:4px;padding:4px 8px;background:var(--surf2);border-radius:4px;border-left:2px solid var(--border2);font-style:italic;line-height:1.4}
+.item-budget{font-size:11px;color:var(--grn);font-weight:700}
+
+/* ── Budget geraamd vs offerte ───────────── */
+.budget-compare{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}
+.bc-cell{background:var(--surf2);border-radius:6px;padding:10px 12px;text-align:center}
+.bc-cell .bc-val{font-size:18px;font-weight:700;line-height:1.2}
+.bc-cell .bc-lbl{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
+
+/* ── Nog te betalen banner ───────────────── */
+.betalen-banner{background:var(--red-lt);border:1px solid #fca5a5;border-radius:var(--r);padding:16px 20px;margin-bottom:14px}
+.betalen-banner .bb-amt{font-size:28px;font-weight:800;color:var(--red);letter-spacing:-1px}
+
+/* ── SVG viewer ──────────────────────────── */
+.svg-viewer{background:#fff;border:1px solid var(--border);border-radius:var(--rsm);overflow:hidden;position:relative;height:calc(100vh - 220px);min-height:500px;cursor:grab;user-select:none;touch-action:none}
+.svg-viewer:active{cursor:grabbing}
+.svg-inner{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+.svg-inner svg{display:block;max-width:none}
+.svg-controls{position:absolute;bottom:12px;right:12px;display:flex;gap:6px;z-index:10}
+.svg-controls button{background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;box-shadow:var(--sh);transition:all .15s}
+.svg-controls button:hover{background:var(--acc);color:#fff;border-color:var(--acc)}
+.svg-load-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;height:220px;gap:12px;color:var(--mut)}
+.svg-load-placeholder .pl-icon{font-size:48px}
+.svg-load-placeholder p{font-size:13px;text-align:center;max-width:280px}
+@media(max-width:750px){
+  /* ── Grid ───────────────────────────────── */
+  .g4{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr}
+  .g2{grid-template-columns:1fr}
+
+  /* ── Main padding (ruimte voor bottom nav) ─ */
+  #main{padding:12px 12px 72px}
+
+  /* ── Header compact ─────────────────────── */
+  #hdr{padding:0 14px;height:48px}
+  #hdr .logo{font-size:14px;gap:7px}
+  .proj{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #sync-status{display:none}
+  #hdr .hdr-right .btn{display:none}
+
+  /* ── Bottom navigation ──────────────────── */
+  #nav{
+    position:fixed;bottom:0;top:auto;left:0;right:0;
+    height:60px;padding:0;gap:0;
+    justify-content:space-around;
+    border-top:1px solid rgba(255,255,255,.1);
+    border-bottom:none;
+    background:var(--hdr);
+    z-index:200;
+    box-shadow:0 -2px 16px rgba(0,0,0,.3);
+    overflow:visible;
+  }
+  #nav button{
+    flex:1;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    padding:4px 2px 8px;
+    font-size:9px;font-weight:500;
+    border-bottom:none;border-top:2px solid transparent;
+    border-radius:0;margin:0;gap:1px;line-height:1.3;
+    position:relative;
+  }
+  #nav button.act{border-top-color:var(--acc);color:var(--acc)}
+  #nav button::before{font-size:20px;line-height:1;display:block}
+  #nb-dashboard::before{content:'📊'}
+  #nb-planning::before{content:'📅'}
+  #nb-ruimtes::before{content:'🏠'}
+  #nb-budget::before{content:'💰'}
+  #nb-beslissingen::before{content:'💬'}
+  #nb-plattegronden::before{content:'🗺'}
+  /* Badge op bottom nav */
+  #nav .nb{
+    position:absolute;top:2px;right:calc(50% - 22px);
+    font-size:9px;padding:0 4px;min-width:14px;text-align:center;
+  }
+
+  /* ── Touch targets ──────────────────────── */
+  .ibtn{min-height:40px;min-width:40px;padding:8px;font-size:16px}
+  .btn-xs{padding:8px 12px;font-size:12px;border-radius:5px}
+  .stbtn{padding:7px 10px;font-size:11px;min-height:36px}
+
+  /* ── Formulieren ────────────────────────── */
+  .frow{flex-direction:column;gap:0}
+  .frow>.ff{margin-bottom:12px}
+  input[type=text],input[type=number],input[type=url],input[type=date],
+  textarea,select{font-size:16px!important;padding:10px 12px}
+
+  /* ── Gantt — verborgen, vervangen door lijstweergave ── */
+  .gantt-wrap{display:none}
+  .gantt-list{display:block}
+
+  /* ── Ruimtes ────────────────────────────── */
+  .rgrid{grid-template-columns:1fr}
+
+  /* ── Budget totaal — 2 kolommen ─────────── */
+  .bud-total-grid{grid-template-columns:1fr 1fr!important}
+  .bud-total-grid>div:last-child{grid-column:1/-1}
+
+  /* ── Beslissingen ───────────────────────── */
+  .bes-top{flex-direction:column;gap:8px}
+  .bes-actions{flex-wrap:wrap;gap:6px}
+  .bes-card .bes-inner{padding:12px}
+
+  /* ── KPI cards ──────────────────────────── */
+  .kpi{padding:14px}
+  .kpi-val{font-size:24px}
+  .kpi-sub{font-size:11px}
+
+  /* ── Section headers ────────────────────── */
+  .shd{margin-bottom:12px}
+  .shd h2{font-size:16px}
+
+  /* ── SVG viewer dynamische hoogte ───────── */
+  .svg-viewer{height:calc(100vh - 200px)}
+
+  /* ── Modals ─────────────────────────────── */
+  .mbox{padding:16px;border-radius:var(--r) var(--r) 0 0;
+    position:fixed;bottom:0;left:0;right:0;width:100%!important;
+    max-width:100%!important;max-height:90vh;border-radius:16px 16px 0 0}
+  .mbg.open{align-items:flex-end}
+
+  /* ── Gantt fase-kaarten (mobiel) ─────────── */
+  .fase-card{background:var(--surf);border:1px solid var(--border);
+    border-radius:var(--r);padding:14px;margin-bottom:10px;box-shadow:var(--sh)}
+  .fase-card .fn{font-size:14px;font-weight:700}
+  .fase-card .fm{font-size:12px;color:var(--mut);margin-top:3px}
+  .fase-card .fl{font-size:12px;color:var(--mut);font-style:italic;
+    margin-top:8px;padding:6px 10px;background:var(--surf2);border-radius:5px;
+    border-left:3px solid var(--border2)}
+
+  /* ── Ruimte header progress bar breder ──── */
+  .rhd .pbar{flex:1}
+
+  /* ── Gantt controls verborgen ───────────── */
+  .gantt-toolbar{display:none}
+
+  /* ── Cards padding ──────────────────────── */
+  .card{padding:14px}
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="hdr">
+  <div class="logo">
+    <div class="logo-icon">🏗</div>
+    Renovatie Planner
+    <span class="proj" id="proj-label" onclick="openModalNaam()">Laadt...</span>
+  </div>
+  <div class="hdr-right">
+    <span id="sync-status" style="font-size:12px;color:#64748b;margin-right:8px"></span>
+    <button class="btn btn-sm" id="btn-search" onclick="toggleSearch()" style="background:rgba(255,255,255,.1);color:#e2e8f0;border:1px solid rgba(255,255,255,.15);font-size:13px" title="Zoeken">🔍</button>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,.1);color:#e2e8f0;border:1px solid rgba(255,255,255,.15);font-size:12px" onclick="exportApp()">⬇ Exporteer</button>
+  </div>
+</div>
+<!-- Search bar -->
+<div id="search-bar" style="display:none;background:var(--hdr2);padding:10px 20px;border-bottom:1px solid rgba(255,255,255,.08)">
+  <div style="position:relative;max-width:600px;margin:0 auto">
+    <input type="text" id="search-input" placeholder="Zoek taken, ruimtes, kosten, beslissingen..." oninput="doSearch(this.value)"
+      style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:white;padding:9px 36px 9px 14px;border-radius:8px;font-size:14px">
+    <button onclick="toggleSearch()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,.6);font-size:18px;cursor:pointer;padding:4px">✕</button>
+  </div>
+  <div id="search-results" style="max-width:600px;margin:8px auto 0;background:var(--surf);border-radius:8px;overflow:hidden;box-shadow:var(--sh-lg);display:none"></div>
+</div>
+<!-- Bulk action bar -->
+<div id="bulk-bar" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:var(--hdr);color:white;padding:10px 20px;border-radius:12px;box-shadow:var(--sh-lg);z-index:150;display:none;align-items:center;gap:12px;white-space:nowrap">
+  <span id="bulk-count" style="font-size:13px;font-weight:600"></span>
+  <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:white" onclick="bulkAssign()">👤 Wijs toe</button>
+  <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:white" onclick="bulkMove()">📦 Verplaats</button>
+  <button class="btn btn-sm" style="background:var(--red);color:white" onclick="bulkDelete()">✕ Verwijder</button>
+  <button class="btn btn-sm" style="background:rgba(255,255,255,.1);color:white" onclick="clearBulk()">Annuleer</button>
+</div>
+
+<!-- Nav -->
+<div id="nav">
+  <button onclick="showTab('dashboard')" id="nb-dashboard" class="act">Dashboard</button>
+  <button onclick="showTab('planning')" id="nb-planning">Planning</button>
+  <button onclick="showTab('ruimtes')" id="nb-ruimtes">Ruimtes <span class="nb" id="bdg-actie" style="display:none">0</span></button>
+  <button onclick="showTab('budget')" id="nb-budget">Budget</button>
+  <button onclick="showTab('beslissingen')" id="nb-beslissingen">Beslissingen <span class="nb" id="bdg-bes" style="display:none">0</span></button>
+  <button onclick="showTab('plattegronden')" id="nb-plattegronden">Plattegronden</button>
+</div>
+
+<div id="main">
+  <div id="tab-dashboard" class="tab act"></div>
+  <div id="tab-planning" class="tab"></div>
+  <div id="tab-ruimtes" class="tab"></div>
+  <div id="tab-budget" class="tab"></div>
+  <div id="tab-beslissingen" class="tab"></div>
+  <div id="tab-plattegronden" class="tab"></div>
+</div>
+
+<!-- ── MODALS ─────────────────────────────────── -->
+
+<!-- Fase -->
+<div class="mbg" id="m-fase"><div class="mbox">
+  <h3 id="m-fase-title">Fase toevoegen</h3>
+  <input type="hidden" id="fase-id">
+  <div class="ff"><label>Naam fase</label><input type="text" id="fase-naam" placeholder="bijv. Sloopwerk"></div>
+  <div class="frow">
+    <div class="ff"><label>Verantwoordelijke</label>
+      <div id="fase-resp-wrap"></div>
+    </div>
+    <div class="ff"><label>Status</label><select id="fase-status"><option value="gepland">Gepland</option><option value="bezig">Bezig</option><option value="afgerond">Afgerond</option></select></div>
+  </div>
+  <div class="frow">
+    <div class="ff"><label>Startweek</label><input type="number" id="fase-sw" min="1" max="52" placeholder="1"></div>
+    <div class="ff"><label>Eindweek</label><input type="number" id="fase-ew" min="1" max="52" placeholder="8"></div>
+    <div class="ff"><label>Voortgang %</label><input type="number" id="fase-prog" min="0" max="100" placeholder="0"></div>
+  </div>
+  <div class="ff"><label>Logboeknotitie</label><textarea id="fase-log" placeholder="bijv. Tim ziek, 1 week vertraging verwacht..."></textarea></div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="fase-del-btn" onclick="deleteFase()" style="display:none;margin-right:auto">Verwijder fase</button>
+    <button class="btn btn-g btn-sm" onclick="closeModal('m-fase')">Annuleer</button>
+    <button class="btn btn-p btn-sm" onclick="saveFase()">Opslaan</button>
+  </div>
+</div></div>
+
+<!-- Checklist item -->
+<div class="mbg" id="m-item"><div class="mbox">
+  <h3 id="m-item-title">Item toevoegen</h3>
+  <input type="hidden" id="item-rid"><input type="hidden" id="item-id">
+  <div class="ff"><label>Omschrijving</label><input type="text" id="item-naam" placeholder="bijv. Stopcontacten plaatsen"></div>
+  <div class="frow">
+    <div class="ff"><label>Categorie</label><select id="item-cat"><option value="ruwbouw">Ruwbouw</option><option value="installaties">Installaties</option><option value="afwerking">Afwerking</option><option value="overig">Overig</option></select></div>
+    <div class="ff"><label>Prioriteit</label><select id="item-prio"><option value="laag">Laag</option><option value="normaal" selected>Normaal</option><option value="hoog">Hoog</option></select></div>
+  </div>
+  <div class="ff"><label>Verantwoordelijke</label><div id="item-resp-wrap"></div></div>
+  <div class="frow">
+    <div class="ff"><label>Geraamd bedrag (€)</label><input type="number" id="item-budget" min="0" step="50" placeholder="0"></div>
+    <div class="ff"><label>Koppelen aan fase</label><select id="item-fase-id"><option value="">— geen —</option></select></div>
+  </div>
+  <div class="ff"><label>Materiaalnotitie</label><input type="text" id="item-mat" placeholder="bijv. 3× dubbele wandcontactdoos, groep 4"></div>
+  <div class="ff"><label>Notitie / context</label><textarea id="item-notitie" placeholder="Extra toelichting, links, beslissingen..." style="min-height:60px"></textarea></div>
+  <div class="ff" style="display:flex;align-items:center;gap:10px">
+    <input type="checkbox" id="item-actie" style="margin:0;flex-shrink:0">
+    <label for="item-actie" style="margin:0;cursor:pointer;font-size:13px;color:var(--txt)">Actie vereist van mij (opdrachtgever)</label>
+  </div>
+  <hr>
+  <div class="frow">
+    <div class="ff"><label>Verplaatsen naar ruimte</label><select id="item-move-to"><option value="">— niet verplaatsen —</option></select></div>
+    <div class="ff"><label>Kopiëren naar ruimte(s)</label>
+      <div id="item-copy-rooms" style="background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;max-height:120px;overflow-y:auto"></div>
+    </div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="item-del-btn" onclick="deleteItem()" style="display:none;margin-right:auto">Verwijder</button>
+    <button class="btn btn-g btn-sm" onclick="closeModal('m-item')">Annuleer</button>
+    <button class="btn btn-p btn-sm" onclick="saveItem()">Opslaan</button>
+  </div>
+</div></div>
+
+<!-- Kostenpost -->
+<div class="mbg" id="m-kost"><div class="mbox" style="width:600px">
+  <h3 id="m-kost-title">Kostenpost toevoegen</h3>
+  <input type="hidden" id="kost-id">
+
+  <div class="ff"><label>Omschrijving</label><input type="text" id="kost-naam" placeholder="bijv. Tegels badkamer"></div>
+
+  <div class="ff"><label>Status</label>
+    <div class="fca g6" style="flex-wrap:wrap" id="kost-lifecycle-wrap"></div>
+  </div>
+
+  <div class="ff"><label>Leverancier / contact</label><div id="kost-contact-wrap"></div></div>
+
+  <div class="frow">
+    <div class="ff"><label>Bedrag (€)</label>
+      <input type="number" id="kost-bedrag" min="0" step="100" placeholder="0" oninput="updateBtwPreview()">
+    </div>
+    <div class="ff"><label>BTW</label>
+      <select id="kost-btw" onchange="updateBtwPreview()">
+        <option value="0">0% — BTW vrij</option>
+        <option value="9">9%</option>
+        <option value="21" selected>21%</option>
+      </select>
+    </div>
+    <div class="ff"><label>Bedrag is</label>
+      <select id="kost-btw-incl" onchange="updateBtwPreview()">
+        <option value="incl">Incl. BTW</option>
+        <option value="excl">Excl. BTW</option>
+      </select>
+    </div>
+  </div>
+  <div id="kost-btw-preview" style="display:none;background:var(--acc-lt);border:1px solid #fde68a;border-radius:6px;padding:8px 12px;font-size:13px;margin:-4px 0 10px"></div>
+
+  <div class="ff"><label>Categorie</label>
+    <select id="kost-type" onchange="kostTypeChange()">
+      <option value="ruimte">Per ruimte</option>
+      <option value="algemeen">Algemeen</option>
+      <option value="meerwerk">Meerwerk</option>
+      <option value="subsidie">Subsidie / Korting</option>
+    </select>
+  </div>
+
+  <div id="kost-ruimte-ff">
+    <div class="ff">
+      <label>Ruimtes</label>
+      <div id="kost-ruimtes-list" style="background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:10px;max-height:150px;overflow-y:auto"></div>
+    </div>
+    <div id="kost-verdeling-wrap" style="display:none" class="ff">
+      <label>Verdeling (% per ruimte)</label>
+      <div id="kost-verdeling"></div>
+    </div>
+  </div>
+
+  <div class="ff"><label>Notitie</label>
+    <textarea id="kost-notitie" placeholder="Aantekeningen, offertedatum, bijzonderheden..." style="min-height:54px"></textarea>
+  </div>
+
+  <div class="ff">
+    <div class="fb mb8">
+      <label style="margin:0;font-size:12px;color:var(--mut);font-weight:500">Betaalschema (termijnen)</label>
+      <button class="btn btn-ghost btn-xs" onclick="addTermijn()">+ Termijn toevoegen</button>
+    </div>
+    <div id="kost-termijnen"></div>
+  </div>
+
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="kost-del-btn" onclick="deleteKost()" style="display:none;margin-right:auto">Verwijder</button>
+    <button class="btn btn-g btn-sm" onclick="closeModal('m-kost')">Annuleer</button>
+    <button class="btn btn-p btn-sm" onclick="saveKost()">Opslaan</button>
+  </div>
+</div></div>
+
+<!-- Beslissing -->
+<div class="mbg" id="m-bes"><div class="mbox">
+  <h3 id="m-bes-title">Beslissing toevoegen</h3>
+  <input type="hidden" id="bes-id">
+  <div class="ff"><label>Omschrijving</label><textarea id="bes-desc" placeholder="Welk besluit moet genomen worden?"></textarea></div>
+  <div class="frow">
+    <div class="ff"><label>Blokkeert fase (optioneel)</label><select id="bes-blok-fase"><option value="">— geen koppeling —</option></select></div>
+    <div class="ff"><label>Deadline (week)</label><input type="number" id="bes-deadline" min="1" max="52" placeholder="week nr."></div>
+  </div>
+  <div class="ff"><label>Status</label><select id="bes-status"><option value="open">Open</option><option value="behandeling">In behandeling</option><option value="besloten">Besloten</option></select></div>
+  <div class="ff"><label>Notitie / uitkomst</label><textarea id="bes-note" placeholder="Toelichting of genomen besluit..."></textarea></div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="bes-del-btn" onclick="deleteBes()" style="display:none;margin-right:auto">Verwijder</button>
+    <button class="btn btn-g btn-sm" onclick="closeModal('m-bes')">Annuleer</button>
+    <button class="btn btn-p btn-sm" onclick="saveBes()">Opslaan</button>
+  </div>
+</div></div>
+
+<!-- Document -->
+<div class="mbg" id="m-doc"><div class="mbox">
+  <h3>Document / link toevoegen</h3>
+  <input type="hidden" id="doc-rid"><input type="hidden" id="doc-id">
+  <div class="ff"><label>Naam</label><input type="text" id="doc-naam" placeholder="bijv. Offerte tegelzetter Tim"></div>
+  <div class="ff"><label>URL</label><input type="url" id="doc-url" placeholder="https://"></div>
+  <div class="mfoot">
+    <button class="btn btn-g btn-sm" onclick="closeModal('m-doc')">Annuleer</button>
+    <button class="btn btn-p btn-sm" onclick="saveDoc()">Toevoegen</button>
+  </div>
+</div></div>
+
+<!-- Ruimte toevoegen -->
+<div class="mbg" id="m-ruimte"><div class="mbox">
+  <h3>Ruimte toevoegen</h3>
+  <div class="ff"><label>Naam ruimte</label><input type="text" id="ruimte-naam" placeholder="bijv. Zolder"></div>
+  <div class="mfoot">
+    <button class="btn btn-g btn-sm" onclick="closeModal('m-ruimte')">Annuleer</button>
+    <button class="btn btn-p btn-sm" onclick="saveRuimte()">Toevoegen</button>
+  </div>
+</div></div>
+
+<!-- Instellingen -->
+<div class="mbg" id="m-naam"><div class="mbox">
+  <h3>Projectinstellingen</h3>
+  <div class="ff"><label>Projectnaam</label><input type="text" id="proj-naam" placeholder="bijv. Renovatie Dorpsstraat 14"></div>
+  <div class="frow">
+    <div class="ff"><label>Jaar (voor Gantt)</label><input type="number" id="proj-jaar" min="2020" max="2040"></div>
+    <div class="ff"><label>Totaalbudget (€)</label><input type="number" id="proj-budget" min="0" step="500"></div>
+  </div>
+  <hr>
+  <!-- Contacten beheer -->
+  <div class="ff">
+    <div class="fb mb10">
+      <span style="font-size:13px;font-weight:700">Contacten</span>
+      <span class="sl" id="contact-count"></span>
+    </div>
+    <div id="contacten-lijst" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <div style="flex:1"><label style="font-size:12px;color:var(--mut);margin-bottom:4px;display:block">Naam</label>
+        <input type="text" id="new-ct-naam" placeholder="Naam" style="font-size:13px"></div>
+      <div style="flex:1.4"><label style="font-size:12px;color:var(--mut);margin-bottom:4px;display:block">Rol / bedrijf</label>
+        <input type="text" id="new-ct-rol" placeholder="bijv. Elektricien (optioneel)" style="font-size:13px"></div>
+      <button class="btn btn-p btn-sm" onclick="addContact()" style="flex-shrink:0;margin-bottom:1px">＋ Toevoegen</button>
+    </div>
+  </div>
+  <hr>
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px 14px;margin-bottom:10px">
+    <div style="font-size:12px;font-weight:700;color:#1d4ed8;margin-bottom:4px">💰 Kosten resetten</div>
+    <div style="font-size:12px;color:#1e40af;margin-bottom:10px">Vervangt <strong>alleen de kostenposten</strong> met de correcte bedragen uit het Excel-overzicht (totaal €423.653). Ruimtes, planning en beslissingen blijven ongewijzigd.</div>
+    <button class="btn btn-sm" style="background:#2563eb;color:white" onclick="resetAlleenKosten()">Reset kosten naar projectbedragen</button>
+  </div>
+  <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:12px 14px">
+    <div style="font-size:12px;font-weight:700;color:#c2410c;margin-bottom:4px">⚠ Alles resetten</div>
+    <div style="font-size:12px;color:#92400e;margin-bottom:10px">Vervangt alle huidige data (fases, ruimtes, kosten, beslissingen) met de ingebouwde projectdata.</div>
+    <button class="btn btn-sm" style="background:#ea580c;color:white" onclick="resetNaarProjectdata()">Laad volledige projectdata opnieuw</button>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-g btn-sm" onclick="closeModal('m-naam')">Annuleer</button>
+    <button class="btn btn-p btn-sm" onclick="saveNaam()">Opslaan</button>
+  </div>
+</div></div>
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// FIREBASE CONFIGURATIE
+// Plak hieronder je eigen firebaseConfig van de Firebase console.
+// Ga naar: console.firebase.google.com → jouw project →
+// Tandwiel (instellingen) → "Your apps" → </> → kopieer de config.
+// ══════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyDCXbVdlXkFvDgWZWWBQAGZvCC-5KLowzE",
+  authDomain:        "bouwreno-225e5.firebaseapp.com",
+  databaseURL:       "https://bouwreno-225e5-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "bouwreno-225e5",
+  storageBucket:     "bouwreno-225e5.firebasestorage.app",
+  messagingSenderId: "239515511003",
+  appId:             "1:239515511003:web:70a04bba81bde875e404fe"
+};
+
+// ── Firebase init (automatisch, niet aanraken) ──
+const FB_READY = !FIREBASE_CONFIG.apiKey.includes('JOUW');
+let fbRef = null;
+if (FB_READY) {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbRef = firebase.database().ref('renovatie');
+  } catch(e) { console.warn('Firebase init fout:', e); }
+}
+
+// ──────────────────────────────────────────
+// DATA & STATE
+// ──────────────────────────────────────────
+
+const SAMPLE = {
+  settings:{naam:'Verbouwing 2026',jaar:2026,budget:426463},
+  ganttView:'week',
+  ganttOffset:15,
+  fases:[
+    {id:'f1',naam:'Sloopwerk',resp:'Tim / KMIEL',sw:19,ew:21,status:'gepland',prog:0,
+      log:'W19-20: sloopwerkzaamheden zaal, wanden, dak, vloeren en plafonds. W21: KMIEL mobiele kraan afbreken aanbouw & afvoeren materiaal.'},
+    {id:'f2',naam:'Constructie & metselwerk',resp:'Aannemer / VD Kruijs',sw:22,ew:27,status:'gepland',prog:0,
+      log:'W22: nieuwe verdiepingsvloer. W23: metselwerk achterzijde aanbouw (pui). W27: hal verbreden + doorgang keuken aanpassen.'},
+    {id:'f3',naam:'Metalstud wanden & plafonds',resp:'Peter Telen',sw:24,ew:29,status:'gepland',prog:0,
+      log:'W24: metalstud wanden bovenverdieping + speelkamer, plafonds uitrichten. W29: dichtmaken plafonds & wanden.'},
+    {id:'f4',naam:'Elektra & datakabels',resp:'Caspar',sw:19,ew:36,status:'gepland',prog:0,
+      log:'W19: stroom verwijderen + paddestoel + meterkast voorbereiden nieuwe positie. W26: stroom in plafonds & wanden. W36: afmonteren + plaatsen zonnepanelen.'},
+    {id:'f5',naam:'Leidingwerk & warmtepomp',resp:'PVDW / Pieter',sw:25,ew:32,status:'gepland',prog:0,
+      log:'W25: leidingwerk warmtepomp + riool verleggen keuken & airco\'s. W31: vloerverwarming aanleggen. W32: installatie warmtepomp.'},
+    {id:'f6',naam:'Isolatie & smeervloer',resp:'Isolatiebedrijf / Vloerwerk',sw:31,ew:33,status:'gepland',prog:0,
+      log:'W31: Miofol isolatie begane grond + smeervloer aanbrengen. W33: isoleren spouwmuren.'},
+    {id:'f7',naam:'Kozijnen plaatsen',resp:'Pro Window',sw:32,ew:32,status:'gepland',prog:0,
+      log:'Kozijnen verwijderen & plaatsen. Kunststof kozijnen totaal (29.500). Infra nuts voorziening al W20.'},
+    {id:'f8',naam:'Stukadoorswerk',resp:'Stukadoor',sw:34,ew:35,status:'gepland',prog:0,log:''},
+    {id:'f9',naam:'Afwerking, deuren & timmerwerk',resp:'Andre / Casper',sw:36,ew:37,status:'gepland',prog:0,
+      log:'W36: zonnepanelen afmonteren + plaatsen (Casper). W37: timmerwerk boeiboord overkapping + deuren afhangen & afwerken binnenzijde.'},
+  ],
+  ruimtes:[
+    {id:'r1',naam:'Gang / Hal (BG)',open:false,items:[
+      {id:'i01',naam:'Hal verbreden — muur doorbreken + verplaatsen',done:false,prio:'hoog',cat:'ruwbouw',mat:'Opgenomen in offerte Tim',actie:false},
+      {id:'i02',naam:'Meterkast nieuwe positie',done:false,prio:'hoog',cat:'installaties',mat:'€1.650 — offerte akkoord, deadline W19',actie:false},
+      {id:'i03',naam:'Voordeur + kozijn plaatsen',done:false,prio:'hoog',cat:'ruwbouw',mat:'Deurenland €4.661,99 incl montage',actie:false},
+      {id:'i04',naam:'Plafond verlagen',done:false,prio:'normaal',cat:'ruwbouw',mat:'Opgenomen in offerte Tim €10.780',actie:false},
+      {id:'i05',naam:'Vloer (PVC, zelf leggen)',done:false,prio:'normaal',cat:'afwerking',mat:'Uit algemene vloerpot',actie:false},
+      {id:'i06',naam:'Elektra + lamppunten',done:false,prio:'normaal',cat:'installaties',mat:'In gehele woning',actie:false},
+    ],docs:[]},
+    {id:'r2',naam:'Keuken (BG)',open:false,items:[
+      {id:'i07',naam:'Keukenopstelling definitief kiezen',done:false,prio:'hoog',cat:'afwerking',mat:'Budget €30.000 incl plaatsing. Ikea optie: €20.795',actie:true},
+      {id:'i08',naam:'Houtkachel + bar slopen (zelf)',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i09',naam:'Doorgang keuken–woonkamer aanpassen voor schuifdeuren',done:false,prio:'hoog',cat:'ruwbouw',mat:'Opgenomen in offerte Tim',actie:false},
+      {id:'i10',naam:'Leidingwerk keuken',done:false,prio:'hoog',cat:'installaties',mat:'Opgenomen in offerte Tim',actie:false},
+      {id:'i11',naam:'Vloer leggen (zelf)',done:false,prio:'normaal',cat:'afwerking',mat:'PVC — Thomas van den Akker',actie:false},
+      {id:'i12',naam:'Stopcontacten werkblad + apparatuur',done:false,prio:'normaal',cat:'installaties',mat:'Min. 6 groepen',actie:false},
+      {id:'i13',naam:'Ensuite deuren plaatsen (zelf)',done:false,prio:'laag',cat:'afwerking',mat:'',actie:false},
+    ],docs:[]},
+    {id:'r3',naam:'Woonkamer (BG)',open:false,items:[
+      {id:'i14',naam:'Vloertype kiezen: PVC of parket',done:false,prio:'hoog',cat:'afwerking',mat:'',actie:true},
+      {id:'i15',naam:'Tuindeuren + kozijn (kunststof)',done:false,prio:'hoog',cat:'ruwbouw',mat:'Opgenomen in offerte kozijnen Pro Window',actie:false},
+      {id:'i16',naam:'Zijdeur + kozijn vernieuwen',done:false,prio:'normaal',cat:'ruwbouw',mat:'Niet bevestigd in offerte Tim',actie:false},
+      {id:'i17',naam:'Vloerverwarming',done:false,prio:'hoog',cat:'installaties',mat:'Opgenomen in offerte Tim / PVDW',actie:false},
+      {id:'i18',naam:'Plafond stucen',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i19',naam:'Stopcontacten + schakelplaatjes',done:false,prio:'normaal',cat:'installaties',mat:'',actie:false},
+      {id:'i20',naam:'Verlichting / spots',done:false,prio:'normaal',cat:'afwerking',mat:'',actie:false},
+    ],docs:[]},
+    {id:'r4',naam:'Speelkamer (BG)',open:false,items:[
+      {id:'i21',naam:'Wand eruit (Tim)',done:false,prio:'hoog',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i22',naam:'WC + afzuigkap slopen (zelf)',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i23',naam:'CV ketel verwijderen',done:false,prio:'normaal',cat:'installaties',mat:'',actie:true},
+      {id:'i24',naam:'Muren stucen + anti-schimmel behandeling',done:false,prio:'normaal',cat:'ruwbouw',mat:'Opgenomen offerte Tim',actie:false},
+      {id:'i25',naam:'Lichtkoepel plaatsen (optioneel)',done:false,prio:'laag',cat:'ruwbouw',mat:'Optioneel ~€3.500',actie:false},
+      {id:'i26',naam:'Stopcontacten + internet',done:false,prio:'normaal',cat:'installaties',mat:'',actie:false},
+    ],docs:[]},
+    {id:'r5',naam:'Kantoor (BG)',open:false,items:[
+      {id:'i27',naam:'Vloer eruit + egaline (zelf)',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i28',naam:'Plafond vervangen (Tim)',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i29',naam:'Deur verplaatsen (optioneel)',done:false,prio:'laag',cat:'ruwbouw',mat:'2e hands deur beschikbaar?',actie:false},
+      {id:'i30',naam:'Elektra + verlichting + internet',done:false,prio:'normaal',cat:'installaties',mat:'',actie:false},
+      {id:'i31',naam:'Nieuwe vloer leggen (zelf)',done:false,prio:'laag',cat:'afwerking',mat:'PVC',actie:false},
+    ],docs:[]},
+    {id:'r6',naam:'Technische ruimte (BG)',open:false,items:[
+      {id:'i32',naam:'Tegels muur + vloer slopen (zelf)',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i33',naam:'Plafond (Tim)',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i34',naam:'Leidingwerk warmtepomp + waterontharder',done:false,prio:'hoog',cat:'installaties',mat:'Waterontharder €508 excl plaatsing',actie:false},
+      {id:'i35',naam:'Buitenunit warmtepomp op platdak',done:false,prio:'hoog',cat:'installaties',mat:'Niet bevestigd in offerte Tim — bespreken!',actie:true},
+    ],docs:[]},
+    {id:'r7',naam:'Badkamer (1e verdieping)',open:false,items:[
+      {id:'i36',naam:'Vloertegels — Noach ivoor 60×60 gerectificeerd',done:false,prio:'hoog',cat:'afwerking',mat:'€17,95/m2 — Tegels in Huis',actie:false},
+      {id:'i37',naam:'Wandtegels type A (KitKat Arrow) + type B (Noach)',done:false,prio:'hoog',cat:'afwerking',mat:'A: €29,95/m2 · B: €86,82/doos',actie:false},
+      {id:'i38',naam:'Bad of inloopdouche — definitieve keuze',done:false,prio:'hoog',cat:'installaties',mat:'Bad Saniclear Freshline 180×80 (€781) is optie',actie:true},
+      {id:'i39',naam:'Zwevend toilet + Geberit inbouwreservoir',done:false,prio:'hoog',cat:'installaties',mat:'',actie:false},
+      {id:'i40',naam:'Wastafelmeubel Aquazuro Napoli 90cm notelaar',done:false,prio:'normaal',cat:'afwerking',mat:'€325,60 + blad €81,60 + kom €156,45',actie:false},
+      {id:'i41',naam:'Badkraan Hansgrohe (of keuze)',done:false,prio:'normaal',cat:'installaties',mat:'Offerte ontvangen €1.924,10',actie:false},
+      {id:'i42',naam:'Dakraam plaatsen',done:false,prio:'normaal',cat:'ruwbouw',mat:'Meerwerk €2.000',actie:false},
+      {id:'i43',naam:'Ventilatie / mechanische afzuiging',done:false,prio:'normaal',cat:'installaties',mat:'Hoe werkt dit met bestaand bad?',actie:true},
+      {id:'i44',naam:'LED spots plafond',done:false,prio:'laag',cat:'afwerking',mat:'Mueller Shae dimbaar goud €161,70',actie:false},
+    ],docs:[]},
+    {id:'r8',naam:'Slaapkamer T&F (1e verdieping)',open:false,items:[
+      {id:'i45',naam:'Muurtje — opening voor inloopkast',done:false,prio:'normaal',cat:'ruwbouw',mat:'Niet bevestigd in offerte Tim',actie:false},
+      {id:'i46',naam:'Deur inloopkast naar overloop dichtmaken',done:false,prio:'laag',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i47',naam:'Vloer leggen (zelf)',done:false,prio:'normaal',cat:'afwerking',mat:'PVC of zwaluwstaart — nog beslissen',actie:false},
+      {id:'i48',naam:'Stopcontacten + internet',done:false,prio:'normaal',cat:'installaties',mat:'',actie:false},
+      {id:'i49',naam:'Airco voorbereiding',done:false,prio:'laag',cat:'installaties',mat:'Optioneel',actie:false},
+    ],docs:[]},
+    {id:'r9',naam:'Slaapkamer Jolijn (1e verdieping)',open:false,items:[
+      {id:'i50',naam:'Portaal maken + scheidingswand (Tim)',done:false,prio:'normaal',cat:'ruwbouw',mat:'Opgenomen offerte Tim',actie:false},
+      {id:'i51',naam:'Keuken verwijderen (zelf)',done:false,prio:'normaal',cat:'ruwbouw',mat:'Was keuken ruimte',actie:false},
+      {id:'i52',naam:'Muurtje verwijderen (zelf)',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i53',naam:'Extra raam plaatsen',done:false,prio:'laag',cat:'ruwbouw',mat:'Niet bevestigd in offerte Tim',actie:false},
+      {id:'i54',naam:'2 deuren plaatsen (Tim)',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i55',naam:'Vloer leggen (zelf)',done:false,prio:'normaal',cat:'afwerking',mat:'Zwaluwstaart — nog prijsopgave vragen',actie:false},
+      {id:'i56',naam:'Stopcontacten + internet',done:false,prio:'normaal',cat:'installaties',mat:'',actie:false},
+    ],docs:[]},
+    {id:'r10',naam:'Slaapkamer Marit (1e verdieping)',open:false,items:[
+      {id:'i57',naam:'Portaal maken + scheidingswand (Tim)',done:false,prio:'normaal',cat:'ruwbouw',mat:'Opgenomen offerte Tim',actie:false},
+      {id:'i58',naam:'Extra raam plaatsen',done:false,prio:'laag',cat:'ruwbouw',mat:'Niet bevestigd in offerte Tim',actie:false},
+      {id:'i59',naam:'2 deuren plaatsen (Tim)',done:false,prio:'normaal',cat:'ruwbouw',mat:'',actie:false},
+      {id:'i60',naam:'Vloer leggen (zelf)',done:false,prio:'normaal',cat:'afwerking',mat:'Zwaluwstaart — nog prijsopgave vragen',actie:false},
+      {id:'i61',naam:'Stopcontacten + internet',done:false,prio:'normaal',cat:'installaties',mat:'',actie:false},
+    ],docs:[]},
+    {id:'r11',naam:'Overloop / 1e hal',open:false,items:[
+      {id:'i62',naam:'Traptredes schilderen + loper',done:false,prio:'laag',cat:'afwerking',mat:'Zelf doen',actie:false},
+      {id:'i63',naam:'Deur evt vervangen naar buiten',done:false,prio:'laag',cat:'ruwbouw',mat:'Optioneel',actie:false},
+      {id:'i64',naam:'Airco voorbereiding overloop',done:false,prio:'laag',cat:'installaties',mat:'Optioneel',actie:false},
+      {id:'i65',naam:'Vloer',done:false,prio:'normaal',cat:'afwerking',mat:'',actie:false},
+    ],docs:[]},
+  ],
+  // Kosten — exact overgenomen uit Excel (totaal: €423.652,53)
+  kosten:[
+    {id:'k01',naam:'Vaste aanneemsom Tim (incl. BTW)',bedrag:244615.50,type:'algemeen',rid:null,lifecycle:'offerte'},
+    {id:'k02',naam:'Zonnepanelen',bedrag:7500,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k03',naam:'Rolluiken solar',bedrag:6092,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k04',naam:'Enkele poort',bedrag:700,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k05',naam:'Tuinaanleg',bedrag:11000,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k06',naam:'Plafondverlagen (incl. BTW)',bedrag:11390.60,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k07',naam:'Meterkast verplaatsen',bedrag:1650,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k08',naam:'Gevel muren isoleren hele woning (incl. BTW)',bedrag:5533.72,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k09',naam:'Isoleren platdak 90m2 (incl. BTW)',bedrag:2269.27,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k10',naam:'Kunststof kozijnen totaal (incl. BTW)',bedrag:29500,type:'algemeen',rid:null,lifecycle:'offerte'},
+    {id:'k11',naam:'Voordeur + montage Deurenland (incl. BTW)',bedrag:4661.99,type:'algemeen',rid:null,lifecycle:'offerte'},
+    {id:'k12',naam:'Degelijke deuren taats + dubbel (incl. BTW)',bedrag:1150.20,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k13',naam:'Vloer PVC aankoop (incl. BTW)',bedrag:5301,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k14',naam:'Vloer leggen — Thomas van den Akker',bedrag:8624.88,type:'algemeen',rid:null,lifecycle:'offerte'},
+    {id:'k15',naam:'Isolatie beganegrond beton 15cm RC4 159m2 incl. wapening',bedrag:6534,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k16',naam:'159m2 smeervloer 8cm (incl.)',bedrag:4838.23,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k17',naam:'Verwijderen gehele werkvloer incl. afgraven',bedrag:5687,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k18',naam:'Zwaluwstaart complete verdieping',bedrag:4053.98,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k19',naam:'Waterontharder (excl. plaatsing)',bedrag:508,type:'algemeen',rid:null,lifecycle:'raming'},
+    {id:'k20',naam:'Keuken incl. plaatsing',bedrag:26500,type:'ruimte',rid:'r2',lifecycle:'raming'},
+    {id:'k21',naam:'Badkamer sanitair + tegels',bedrag:5918.54,type:'ruimte',rid:'r7',lifecycle:'raming'},
+    {id:'k22',naam:'WC',bedrag:1631.77,type:'ruimte',rid:null,lifecycle:'raming'},
+    {id:'k23',naam:'10% prijsverhoging Tim (incl. BTW)',bedrag:25991.85,type:'meerwerk',rid:null,lifecycle:'raming'},
+    {id:'k24',naam:'Dakraam badkamer extra',bedrag:2000,type:'meerwerk',rid:null,lifecycle:'raming'},
+  ],
+  beslissingen:[
+    {id:'b1',desc:'Keukenopstelling definitief vaststellen — leidingwerk kan anders niet starten',faseId:'f5',deadline:17,status:'open',
+      note:'Ikea optie bekeken: kasten €3.500 + apparatuur €9.295 + blad €5.000 + montage €3.000 = €20.795. Budget is €30.000.'},
+    {id:'b2',desc:'Vloertype woonkamer: PVC-plank of zwaluwstaart parket?',faseId:'f9',deadline:25,status:'open',note:''},
+    {id:'b3',desc:'Badkamer: inloopdouche of bad?',faseId:'f5',deadline:20,status:'open',
+      note:'Bad Saniclear Freshline 180×80 bekeken (€781). Inloopdouche heeft voorkeur maar kosten vergelijken.'},
+    {id:'b4',desc:'Zonnepanelen via Tim (10% opslag) of los regelen via Casper?',faseId:'f4',deadline:16,status:'behandeling',
+      note:'Tim wil 10% extra berekenen. Casper doet installatie toch al. Los regelen mogelijk €750 voordeliger.'},
+    {id:'b5',desc:'Mechanische ventilatie of WTW systeem?',faseId:'f5',deadline:18,status:'open',
+      note:'WTW beter voor energielabel maar duurder. Mechanische ventilatie bespaart ~€2.000. Advies Tim vragen.'},
+    {id:'b6',desc:'Zwaluwstaart vloer slaapkamers Jolijn en Marit — prijsopgave opvragen',faseId:'f9',deadline:30,status:'open',
+      note:'Nog geen offerte. Vragen bij Thomas van den Akker naast de PVC-offerte.'},
+  ],
+  contacten:[
+    {id:'ct01',naam:'Tim',rol:'Aannemer (hoofdaannemer)'},
+    {id:'ct02',naam:'Caspar',rol:'Elektra & zonnepanelen'},
+    {id:'ct03',naam:'PVDW',rol:'Loodgieterswerk & leidingen'},
+    {id:'ct04',naam:'Pieter',rol:'Installatie warmtepomp'},
+    {id:'ct05',naam:'Peter Telen',rol:'Metalstud wanden & plafonds'},
+    {id:'ct06',naam:'VD Kruijs',rol:'Metselwerk'},
+    {id:'ct07',naam:'Pro Window',rol:'Kozijnen'},
+    {id:'ct08',naam:'Andre',rol:'Timmerwerk & deuren'},
+    {id:'ct09',naam:'Thomas van den Akker',rol:'Vloerlegger'},
+    {id:'ct10',naam:'KMIEL',rol:'Mobiele kraan & sloopwerk'},
+    {id:'ct11',naam:'Stukadoor',rol:'Stucwerk'},
+    {id:'ct12',naam:'Thomas',rol:'Opdrachtgever'},
+    {id:'ct13',naam:'Floor',rol:'Opdrachtgever'},
+    {id:'ct14',naam:'Stef',rol:''},
+  ],
+};
+
+let S;
+let _fbListening = false;
+let _saveTimer;
+
+// ── Sync-status indicator ─────────────────
+function setSyncStatus(status) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  const map = {
+    off:    '',
+    saving: '<span style="color:#94a3b8;font-size:11px">⟳ Opslaan...</span>',
+    saved:  '<span style="color:#86efac;font-size:11px">✓ Gesynchroniseerd</span>',
+    local:  '<span style="color:#fbbf24;font-size:11px">💾 Lokaal opgeslagen</span>',
+    error:  '<span style="color:#fca5a5;font-size:11px">✕ Sync mislukt</span>',
+  };
+  el.innerHTML = map[status] || '';
+}
+
+// ── Opslaan ───────────────────────────────
+function save() {
+  // Altijd direct naar localStorage (offline backup + snelheid)
+  try { localStorage.setItem('renov_v2', JSON.stringify(S)); } catch(e) {}
+
+  if (!FB_READY || !fbRef) {
+    setSyncStatus('local');
+    return;
+  }
+
+  // Debounced Firebase-schrijfactie (max 1x per 800ms)
+  clearTimeout(_saveTimer);
+  setSyncStatus('saving');
+  _saveTimer = setTimeout(() => {
+    fbRef.set(S)
+      .then(() => setSyncStatus('saved'))
+      .catch(err => { console.error('Firebase save:', err); setSyncStatus('error'); });
+  }, 800);
+}
+
+// ── Laden + real-time luisteren ───────────
+function load() {
+  // Laad eerst uit localStorage (instant, werkt offline)
+  try {
+    const raw = localStorage.getItem('renov_v2');
+    S = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(SAMPLE));
+  } catch(e) {
+    S = JSON.parse(JSON.stringify(SAMPLE));
+  }
+  normalizeState();
+  if (!S.ganttOffset && S.ganttOffset !== 0) S.ganttOffset = Math.max(0, currentWeek() - 6);
+
+  if (!FB_READY || !fbRef) {
+    setSyncStatus('local');
+    return; // Alleen localStorage, Firebase niet geconfigureerd
+  }
+
+  // Firebase: eenmalig laden + real-time listener
+  setSyncStatus('saving');
+  fbRef.on('value', snapshot => {
+    const data = snapshot.val();
+    if (data) {
+      S = data;
+      normalizeState();
+      if (!S.ganttOffset && S.ganttOffset !== 0) S.ganttOffset = Math.max(0, currentWeek() - 6);
+      try { localStorage.setItem('renov_v2', JSON.stringify(S)); } catch(e) {}
+      render(); // UI updaten als data van ander apparaat binnenkomt
+    } else if (!_fbListening) {
+      // Eerste keer: Firebase is leeg → schrijf sample data weg
+      fbRef.set(S);
+    }
+    _fbListening = true;
+    setSyncStatus('saved');
+  }, err => {
+    console.error('Firebase luisteren mislukt:', err);
+    setSyncStatus('error');
+  });
+}
+// ──────────────────────────────────────────
+// NORMALISATIE — Firebase slaat lege arrays,
+// lege strings en `false` NIET op. Dit vangt
+// alles op na elke load of Firebase write.
+// ──────────────────────────────────────────
+function arr(v){return Array.isArray(v)?v:(v&&typeof v==='object'?Object.values(v):[]);}
+
+function normalizeState(){
+  if(!S)return;
+  // Top-level arrays
+  S.ruimtes     = arr(S.ruimtes);
+  S.fases       = arr(S.fases);
+  S.kosten      = arr(S.kosten);
+  S.beslissingen= arr(S.beslissingen);
+  S.contacten   = arr(S.contacten);
+  // Settings
+  if(!S.settings||typeof S.settings!=='object')
+    S.settings={naam:'Verbouwing 2026',jaar:2026,budget:0};
+  if(!S.settings.naam)S.settings.naam='Verbouwing 2026';
+  if(!S.settings.jaar)S.settings.jaar=2026;
+  if(S.settings.budget===undefined||S.settings.budget===null)S.settings.budget=0;
+  // Ruimtes
+  S.ruimtes.forEach(r=>{
+    if(!r||typeof r!=='object')return;
+    r.items = arr(r.items);
+    r.docs  = arr(r.docs);
+    r.items.forEach(i=>{
+      if(!i||typeof i!=='object')return;
+      if(!i.prio)  i.prio  ='normaal';
+      if(!i.cat)   i.cat   ='overig';
+      if(i.done===undefined||i.done===null)i.done=false;
+      if(i.actie===undefined||i.actie===null)i.actie=false;
+      if(i.budget===undefined)i.budget=0;
+    });
+    r.docs.forEach(d=>{if(!d.url)d.url='';if(!d.naam)d.naam='Zonder naam';});
+  });
+  // Fases
+  S.fases.forEach(f=>{
+    if(!f||typeof f!=='object')return;
+    if(!f.status)f.status='gepland';
+    if(f.prog===undefined||f.prog===null)f.prog=0;
+    if(!f.sw)f.sw=1; if(!f.ew)f.ew=4;
+  });
+  // Kosten
+  S.kosten.forEach(k=>{
+    if(!k||typeof k!=='object')return;
+    k.termijnen = arr(k.termijnen);
+    k.rids      = arr(k.rids);
+    if(k.bedrag===undefined||k.bedrag===null)k.bedrag=0;
+    if(!k.type)k.type='algemeen';
+    if(!k.lifecycle)k.lifecycle='raming';
+    if(k.btwPct===undefined)k.btwPct=0;
+    // btwIncl: Firebase drops `false` → treat undefined as true (incl)
+    if(k.btwIncl===undefined||k.btwIncl===null)k.btwIncl=true;
+    k.termijnen.forEach(t=>{
+      if(t.betaald===undefined||t.betaald===null)t.betaald=false;
+      if(t.bedrag===undefined)t.bedrag=0;
+      if(!t.datum)t.datum='';
+    });
+  });
+  // Beslissingen
+  S.beslissingen.forEach(b=>{
+    if(!b||typeof b!=='object')return;
+    if(!b.status)b.status='open';
+    if(!b.desc)b.desc='';
+  });
+  // Gantt state
+  if(!S.ganttView)S.ganttView='week';
+  if(S.ganttOffset===undefined||S.ganttOffset===null)
+    S.ganttOffset=Math.max(0,currentWeek()-6);
+}
+
+function uid(){return '_'+Math.random().toString(36).slice(2,9)}
+const fmt=n=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n||0);
+function pct(d,t){return t?Math.round(d/t*100):0}
+const MAAN=['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+function weekToMonth(w){return Math.min(11,Math.floor((w-1)/4.33))}
+function currentWeek(){
+  const d=new Date(),jan4=new Date(d.getFullYear(),0,4);
+  const w1=new Date(jan4.getTime()-((jan4.getDay()||7)-1)*86400000);
+  return Math.max(1,Math.min(52,Math.floor((d-w1)/604800000)+1));
+}
+function esc(s){return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''}
+
+// ── Configuratie-banner ───────────────────
+function renderConfigBanner() {
+  const existing = document.getElementById('fb-banner');
+  if (FB_READY) { if (existing) existing.remove(); return; }
+  if (existing) return;
+  const banner = document.createElement('div');
+  banner.id = 'fb-banner';
+  banner.style.cssText = 'background:#1e293b;color:#e2e8f0;padding:10px 24px;font-size:13px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #334155';
+  banner.innerHTML = `
+    <span style="font-size:16px">🔌</span>
+    <span>Firebase nog niet geconfigureerd — data wordt <strong>alleen lokaal</strong> opgeslagen (geen sync tussen apparaten).</span>
+    <span style="color:#94a3b8;font-size:12px;margin-left:auto">Plak je Firebase config in het script-blok bovenaan het HTML-bestand.</span>`;
+  document.getElementById('nav').after(banner);
+}
+
+// ──────────────────────────────────────────
+// NAVIGATION
+// ──────────────────────────────────────────
+let _tab='dashboard';
+function showTab(id){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('act'));
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.remove('act'));
+  document.getElementById('tab-'+id).classList.add('act');
+  document.getElementById('nb-'+id).classList.add('act');
+  _tab=id; render();
+}
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+// Modals sluiten NIET meer bij buiten-klik — data gaat niet verloren
+// Alleen Annuleer of ✕ sluit het modal
+
+let _toastT;
+function toast(msg){
+  const el=document.getElementById('toast');el.textContent=msg;el.style.display='block';
+  clearTimeout(_toastT);_toastT=setTimeout(()=>el.style.display='none',2600);
+}
+
+// ──────────────────────────────────────────
+// RENDER
+// ──────────────────────────────────────────
+function render(){
+  try{normalizeState();}catch(e){console.warn('normalize:',e);}
+  try{
+    updateBadges();
+    document.getElementById('proj-label').textContent=S.settings?.naam||'Instellingen';
+  }catch(e){console.warn('header:',e);}
+  try{
+    if(_tab==='dashboard')renderDash();
+    else if(_tab==='planning')renderPlanning();
+    else if(_tab==='ruimtes')renderRuimtes();
+    else if(_tab==='budget')renderBudget();
+    else if(_tab==='beslissingen')renderBes();
+    else if(_tab==='plattegronden')renderPlattegronden();
+  }catch(e){
+    console.error('Render fout in tab "'+_tab+'":', e);
+    const el=document.getElementById('tab-'+_tab);
+    if(el)el.innerHTML=`<div class="card mt16" style="border-left:4px solid var(--red)">
+      <div class="ctitle" style="color:var(--red)">Er is een fout opgetreden</div>
+      <div style="font-size:13px;margin-top:8px">${esc(e.message)}</div>
+      <div class="sl mt8">Probeer de pagina te vernieuwen. Als het probleem aanhoudt, gebruik "Laad projectdata opnieuw" in Instellingen.</div>
+    </div>`;
+  }
+}
+
+function updateBadges(){
+  const actie=S.ruimtes.flatMap(r=>r.items||[]).filter(i=>i.actie&&!i.done).length;
+  const bes=S.beslissingen.filter(b=>b.status==='open').length;
+  const ba=document.getElementById('bdg-actie'),bb=document.getElementById('bdg-bes');
+  ba.style.display=actie?'inline-block':'none';ba.textContent=actie;
+  bb.style.display=bes?'inline-block':'none';bb.textContent=bes;
+}
+
+// ──────────────────────────────────────────
+// DASHBOARD
+// ──────────────────────────────────────────
+function renderDash(){
+  const allItems=S.ruimtes.flatMap(r=>r.items||[]);
+  const done=allItems.filter(i=>i.done).length, tot=allItems.length;
+  const actie=allItems.filter(i=>i.actie&&!i.done);
+  const openBes=S.beslissingen.filter(b=>b.status==='open');
+  const kosten=S.kosten.reduce((s,k)=>s+Number(k.bedrag||0),0);
+  const budget=Number(S.settings.budget||0);
+  const vrij=Math.max(0,budget-kosten);
+  const over=kosten>budget?kosten-budget:0;
+  const bpct=budget?Math.min(100,Math.round(kosten/budget*100)):0;
+  const cw=currentWeek();
+
+  // Planning status
+  const activeFase=S.fases.find(f=>f.status==='bezig');
+  const nextFase=S.fases.find(f=>f.status==='gepland');
+  const eindweek=S.fases.length?Math.max(...S.fases.map(f=>f.ew)):52;
+  const weeksLeft=Math.max(0,eindweek-cw);
+  let planStatus,planColor;
+  if(!activeFase&&S.fases.some(f=>f.status==='gepland')){planStatus='Nog niet gestart';planColor='mut';}
+  else if(activeFase){
+    const onTrack=activeFase.prog>=(cw-activeFase.sw)/(activeFase.ew-activeFase.sw)*100-10;
+    planStatus=onTrack?`Op schema — W${cw} in fase "${esc(activeFase.naam)}"`:`Let op: fase "${esc(activeFase.naam)}" loopt mogelijk achter`;
+    planColor=onTrack?'grn':'org';
+  } else {planStatus='Alle fases afgerond';planColor='grn';}
+
+  let h='';
+  // KPI row
+  h+=`<div class="shd"><h2>Dashboard</h2><button class="btn btn-g btn-sm" onclick="openModalNaam()">⚙ Instellingen</button></div>`;
+  h+=`<div class="g4 mb16">
+    <div class="kpi kpi-acc">
+      <div class="kpi-label">Taken voltooid</div>
+      <div class="kpi-val">${pct(done,tot)}<span style="font-size:18px;font-weight:600">%</span></div>
+      <div class="kpi-sub">${done} van ${tot} items</div>
+      <div class="pbar pbar-lg mt12"><div class="pfill pf-acc" style="width:${pct(done,tot)}%"></div></div>
+    </div>
+    <div class="kpi kpi-${over?'red':bpct>80?'org':'grn'}">
+      <div class="kpi-label">Budget</div>
+      <div class="kpi-val ${over?'red':''}">${bpct}<span style="font-size:18px;font-weight:600">%</span></div>
+      <div class="kpi-sub">${fmt(kosten)} van ${fmt(budget)}</div>
+      <div class="pbar pbar-lg mt12"><div class="pfill pf-${over?'red':bpct>80?'org':'grn'}" style="width:${bpct}%"></div></div>
+    </div>
+    <div class="kpi kpi-${actie.length?'red':'grn'}">
+      <div class="kpi-label">Actie vereist</div>
+      <div class="kpi-val ${actie.length?'red':'grn'}">${actie.length}</div>
+      <div class="kpi-sub">${actie.length?'open punten voor jou':'Niets te doen ✓'}</div>
+    </div>
+    <div class="kpi kpi-${openBes.length?'org':'grn'}">
+      <div class="kpi-label">Open beslissingen</div>
+      <div class="kpi-val ${openBes.length?'org':'grn'}">${openBes.length}</div>
+      <div class="kpi-sub">${weeksLeft} weken tot einde project</div>
+    </div>
+  </div>`;
+
+  // Planning status banner
+  h+=`<div class="card mb16" style="border-left:4px solid var(--${planColor})">
+    <div class="fca g10">
+      <div style="font-size:20px">${planColor==='grn'?'✅':planColor==='org'?'⚠️':'⏸️'}</div>
+      <div>
+        <div class="bold" style="font-size:15px">${planStatus}</div>
+        ${activeFase?`<div class="sl mt4">Verantwoordelijke: ${activeFase.resp||'—'} &nbsp;·&nbsp; Week ${activeFase.sw}–${activeFase.ew} &nbsp;·&nbsp; Voortgang: ${activeFase.prog}%</div>`:''}
+        ${nextFase&&!activeFase?`<div class="sl mt4">Volgende fase: ${esc(nextFase.naam)} start week ${nextFase.sw}</div>`:''}
+      </div>
+    </div>
+  </div>`;
+
+  // Actie vereist
+  h+=`<div class="g2 mb16">`;
+  h+=`<div class="card">
+    <div class="ctitle" style="${actie.length?'color:var(--red)':''}">⚡ Actie vereist van jou</div>`;
+  if(!actie.length){
+    h+=`<div style="color:var(--grn);font-size:13px;padding:8px 0">✓ Geen openstaande acties</div>`;
+  } else {
+    actie.slice(0,6).forEach(i=>{
+      const r=S.ruimtes.find(r=>r.items.some(x=>x.id===i.id));
+      h+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="width:4px;height:32px;background:var(--red);border-radius:2px;flex-shrink:0"></div>
+        <div style="flex:1">
+          <div class="bold" style="font-size:13px">${esc(i.naam)}</div>
+          <div class="sl">${r?esc(r.naam):''} &nbsp;·&nbsp; <span class="tag t-${i.prio}">${i.prio}</span></div>
+        </div>
+      </div>`;
+    });
+    if(actie.length>6)h+=`<div class="sl mt8">+ ${actie.length-6} meer <span style="cursor:pointer;color:var(--acc)" onclick="showTab('ruimtes')">→ bekijk alles</span></div>`;
+  }
+  h+=`</div>`;
+
+  // Open beslissingen
+  h+=`<div class="card">
+    <div class="ctitle" style="${openBes.length?'color:var(--org)':''}">❓ Open beslissingen</div>`;
+  if(!openBes.length){
+    h+=`<div style="color:var(--grn);font-size:13px;padding:8px 0">✓ Alle beslissingen genomen</div>`;
+  } else {
+    openBes.slice(0,4).forEach(b=>{
+      const fase=b.faseId?S.fases.find(f=>f.id===b.faseId):null;
+      const urgent=fase&&fase.status==='bezig';
+      h+=`<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:500">${esc(b.desc.substring(0,60))}${b.desc.length>60?'…':''}</div>
+        <div class="fca g8 mt4">
+          ${urgent?`<span class="tag t-urgent">Urgent</span>`:''}
+          ${fase?`<span class="sl">Blokkeert: ${esc(fase.naam)}</span>`:''}
+          ${b.deadline?`<span class="sl">Deadline: W${b.deadline}</span>`:''}
+        </div>
+      </div>`;
+    });
+  }
+  h+=`</div></div>`;
+
+  // Voortgang per ruimte
+  h+=`<div class="card">
+    <div class="ctitle">Voortgang per ruimte</div>
+    <div class="g2">`;
+  S.ruimtes.forEach(r=>{
+    const d=(r.items||[]).filter(i=>i.done).length,t=(r.items||[]).length;
+    const p=pct(d,t);
+    const c=p===100?'grn':p>50?'acc':'blu';
+    h+=`<div style="cursor:pointer" onclick="showTab('ruimtes')">
+      <div class="fb mb4">
+        <span style="font-size:13px;font-weight:600">${esc(r.naam)}</span>
+        <span class="sl">${d}/${t}</span>
+      </div>
+      <div class="pbar"><div class="pfill pf-${c}" style="width:${p}%"></div></div>
+    </div>`;
+  });
+  h+=`</div></div>`;
+
+  document.getElementById('tab-dashboard').innerHTML=h;
+}
+
+// ──────────────────────────────────────────
+// PLANNING
+// ──────────────────────────────────────────
+const GANTT_COLS=26;
+function renderPlanning(){
+  const isMobile=window.innerWidth<=750;
+  if(isMobile){renderPlanningMobile();return;}
+
+  const jaar=S.settings.jaar||2025;
+  const view=S.ganttView||'week';
+  const off=Number(S.ganttOffset)||0;
+  const cw=currentWeek();
+
+  // Build column headers
+  let cols=[];
+  if(view==='week'){
+    for(let i=0;i<GANTT_COLS;i++){
+      const w=off+i+1;
+      cols.push(w>52?'W'+(w-52):('W'+String(w).padStart(2,'0')));
+    }
+  } else {
+    cols=MAAN;
+  }
+  const NCOLS=view==='week'?GANTT_COLS:12;
+
+  let h=`<div class="shd"><h2>Planning ${jaar}</h2>
+    <div class="fca g8">
+      <button class="btn btn-ghost btn-sm" onclick="sortFases()" title="Sorteer fases op startweek">↕ Sorteer op week</button>
+      <button class="btn btn-p btn-sm" onclick="openFaseModal()">+ Fase toevoegen</button>
+    </div>
+  </div>
+  <div class="gantt-wrap">
+    <div class="gantt-toolbar">
+      <div class="tgrp">
+        <button class="${view==='week'?'act':''}" onclick="setGanttView('week')">Weeknummers</button>
+        <button class="${view==='maand'?'act':''}" onclick="setGanttView('maand')">Maanden</button>
+      </div>
+      ${view==='week'?`<div class="gnav">
+        <button onclick="shiftGantt(-8)" title="8 weken terug">←</button>
+        <button onclick="shiftGantt(-4)" title="4 weken terug">‹</button>
+        <span class="week-info">W${off+1} – W${Math.min(52,off+GANTT_COLS)} &nbsp;·&nbsp; Jaar ${jaar}</span>
+        <button onclick="shiftGantt(4)" title="4 weken voor">›</button>
+        <button onclick="shiftGantt(8)" title="8 weken voor">→</button>
+        <button onclick="jumpToNow()" style="font-size:11px;padding:4px 8px;border:1px solid var(--border);background:var(--acc-lt);color:var(--acc-dk);border-radius:4px;cursor:pointer;font-weight:600">Nu</button>
+      </div>`:''}
+      <span class="sl" style="margin-left:auto">Huidige week: <strong>W${cw}</strong> · Klik op fase om te bewerken</span>
+    </div>
+    <div class="gantt-inner">
+      <div class="ghd">
+        <div class="gl">Fase</div>
+        <div class="gr">Verantwoordelijke</div>
+        <div class="gst">Status</div>
+        <div class="gprog">%</div>
+        <div class="gtl">`;
+  cols.forEach((c,i)=>{
+    const wNum=view==='week'?off+i+1:null;
+    const isCurr=view==='week'&&wNum===cw;
+    h+=`<div class="gcol ${isCurr?'curr':''}">${c}</div>`;
+  });
+  h+=`</div></div>`;
+
+  if(!S.fases.length){
+    h+=`<div class="empty"><div class="ei">📅</div><p>Nog geen fases. Voeg een fase toe om te beginnen.</p></div>`;
+  }
+
+  S.fases.forEach(f=>{
+    const sw=Math.max(1,Number(f.sw)||1);
+    const ew=Math.min(52,Number(f.ew)||sw);
+
+    let left,width,visible=true;
+    if(view==='week'){
+      const visStart=off+1, visEnd=off+GANTT_COLS;
+      if(ew<visStart||sw>visEnd){visible=false;}
+      else{
+        const clampedSw=Math.max(sw,visStart), clampedEw=Math.min(ew,visEnd);
+        left=(clampedSw-visStart)/GANTT_COLS*100;
+        width=(clampedEw-clampedSw+1)/GANTT_COLS*100;
+      }
+    } else {
+      const sm=weekToMonth(sw), em=weekToMonth(ew);
+      left=sm/12*100;
+      width=Math.max(8,(em-sm+1)/12*100);
+    }
+
+    // Current week marker in cells
+    let currLeft=null;
+    if(view==='week'){
+      const visStart=off+1;
+      if(cw>=visStart&&cw<=off+GANTT_COLS)currLeft=(cw-visStart)/GANTT_COLS*100;
+    }
+
+    const progColor=f.status==='afgerond'?'grn':f.status==='bezig'?'org':'blu';
+
+    const fi=S.fases.indexOf(f);
+    h+=`<div class="grow">
+      <div class="grow-l">
+        <div class="fca g4">
+          <div style="display:flex;flex-direction:column;gap:1px;flex-shrink:0">
+            <button class="ibtn" style="padding:1px 4px;font-size:11px;line-height:1;min-height:0;${fi===0?'opacity:.3;pointer-events:none':''}" onclick="moveFase('${f.id}',-1)" title="Omhoog">▲</button>
+            <button class="ibtn" style="padding:1px 4px;font-size:11px;line-height:1;min-height:0;${fi===S.fases.length-1?'opacity:.3;pointer-events:none':''}" onclick="moveFase('${f.id}',1)" title="Omlaag">▼</button>
+          </div>
+          <div>
+            <div class="gname">${esc(f.naam)}</div>
+            ${f.log?`<div class="gsub" title="${esc(f.log)}">📝 ${esc(f.log.substring(0,28))}${f.log.length>28?'…':''}</div>`:`<div class="gsub">W${sw} – W${ew}</div>`}
+          </div>
+        </div>
+      </div>
+      <div class="grow-r">${(f.respId?contactNaam(f.respId):f.resp)||'<span class="mut">—</span>'}</div>
+      <div class="grow-st">
+        <div class="fca g4">
+          ${['gepland','bezig','afgerond'].map(s=>`<button class="stbtn st-${s} ${f.status===s?'on':''}" onclick="quickStatus('${f.id}','${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join('')}
+        </div>
+      </div>
+      <div class="grow-prog ${progColor}">${f.prog}%</div>
+      <div class="grow-cells">`;
+
+    // BG grid lines
+    for(let i=0;i<NCOLS;i++){
+      h+=`<div class="gbg" style="left:${i/NCOLS*100}%;width:${1/NCOLS*100}%"></div>`;
+    }
+    // Current week line
+    if(currLeft!==null)h+=`<div class="gcurr-line" style="left:${currLeft}%"></div>`;
+    // Bar
+    if(visible){
+      h+=`<div class="gbar has-tooltip ${f.status}" style="left:${left}%;width:${width}%" onclick="openFaseModal('${f.id}')">
+        ${esc(f.naam)}
+        <div class="tooltip">${esc(f.naam)}<br>W${sw}–W${ew} · ${f.prog}%${(f.respId?contactNaam(f.respId):f.resp)?`<br>👤 ${esc(f.respId?contactNaam(f.respId):f.resp)}`:''}${f.log?`<br>📝 ${esc(f.log.substring(0,60))}`:''}${f.log.length>60?'…':''}</div>
+      </div>`;
+    }
+    h+=`</div></div>`;
+  });
+
+  h+=`</div></div>`;
+  document.getElementById('tab-planning').innerHTML=h;
+}
+
+function renderPlanningMobile(){
+  const jaar=S.settings.jaar||2026;
+  const cw=currentWeek();
+  let h=`<div class="shd"><h2>Planning ${jaar}</h2>
+    <button class="btn btn-p btn-sm" onclick="openFaseModal()">+ Fase</button>
+  </div>
+  <div class="gantt-list">`;
+
+  if(!S.fases.length){
+    h+=`<div class="empty"><div class="ei">📅</div><p>Nog geen fases toegevoegd.</p></div>`;
+  }
+
+  S.fases.forEach((f,fi)=>{
+    const active=f.sw<=cw&&f.ew>=cw;
+    const progColor=f.status==='afgerond'?'grn':f.status==='bezig'?'org':'blu';
+    h+=`<div class="fase-card" style="${active?'border-left:3px solid var(--acc)':''}">
+      <div class="fb">
+        <div style="display:flex;flex-direction:column;gap:2px;margin-right:8px;flex-shrink:0">
+          <button class="ibtn" style="padding:4px 6px;font-size:13px;min-height:0;${fi===0?'opacity:.25;pointer-events:none':''}" onclick="moveFase('${f.id}',-1)">▲</button>
+          <button class="ibtn" style="padding:4px 6px;font-size:13px;min-height:0;${fi===S.fases.length-1?'opacity:.25;pointer-events:none':''}" onclick="moveFase('${f.id}',1)">▼</button>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="fn">${esc(f.naam)}</div>
+          <div class="fm">
+            W${f.sw}–W${f.ew} · ${jaar}
+            ${(f.respId?contactNaam(f.respId):f.resp)?`· <strong>${esc(f.respId?contactNaam(f.respId):f.resp)}</strong>`:''}
+            ${active?`<span class="tag t-bezig" style="margin-left:6px;font-size:10px">● Nu actief</span>`:''}
+          </div>
+        </div>
+        <button class="ibtn" onclick="openFaseModal('${f.id}')" style="flex-shrink:0">✏️</button>
+      </div>
+      <div class="mt8">
+        <div class="fb mb4">
+          <span class="sl">Voortgang</span>
+          <span class="bold ${progColor}">${f.prog}%</span>
+        </div>
+        <div class="pbar pbar-lg"><div class="pfill pf-${progColor}" style="width:${f.prog}%"></div></div>
+      </div>
+      <div class="fca g6 mt10" style="flex-wrap:wrap">
+        ${['gepland','bezig','afgerond'].map(s=>`<button class="stbtn st-${s} ${f.status===s?'on':''}" onclick="quickStatus('${f.id}','${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join('')}
+      </div>
+      ${f.log?`<div class="fl mt8">📝 ${esc(f.log)}</div>`:''}
+    </div>`;
+  });
+
+  h+=`</div>`;
+  document.getElementById('tab-planning').innerHTML=h;
+}
+
+function setGanttView(v){S.ganttView=v;save();renderPlanning()}
+
+function sortFases(){
+  S.fases.sort((a,b)=>Number(a.sw||0)-Number(b.sw||0));
+  save();renderPlanning();toast('Fases gesorteerd op startweek');
+}
+
+function moveFase(id,dir){
+  const i=S.fases.findIndex(f=>f.id===id);if(i<0)return;
+  const ni=i+dir;
+  if(ni<0||ni>=S.fases.length)return;
+  [S.fases[i],S.fases[ni]]=[S.fases[ni],S.fases[i]];
+  save();renderPlanning();
+}
+function shiftGantt(n){
+  S.ganttOffset=Math.max(0,Math.min(26,Number(S.ganttOffset||0)+n));
+  save();renderPlanning();
+}
+function jumpToNow(){S.ganttOffset=Math.max(0,currentWeek()-6);save();renderPlanning()}
+function quickStatus(fid,status){
+  const f=S.fases.find(x=>x.id===fid);if(!f)return;
+  f.status=status;
+  if(status==='afgerond')f.prog=100;
+  if(status==='gepland')f.prog=0;
+  save();render();toast('Status bijgewerkt');
+}
+
+function openFaseModal(id){
+  if(id){
+    const f=S.fases.find(x=>x.id===id);if(!f)return;
+    document.getElementById('m-fase-title').textContent='Fase bewerken';
+    document.getElementById('fase-id').value=f.id;
+    document.getElementById('fase-naam').value=f.naam;
+    document.getElementById('fase-status').value=f.status;
+    document.getElementById('fase-sw').value=f.sw;
+    document.getElementById('fase-ew').value=f.ew;
+    document.getElementById('fase-prog').value=f.prog||0;
+    document.getElementById('fase-log').value=f.log||'';
+    document.getElementById('fase-del-btn').style.display='inline-flex';
+    buildContactDropdown('fase-resp-wrap', f.respId||'');
+  } else {
+    document.getElementById('m-fase-title').textContent='Fase toevoegen';
+    ['fase-id','fase-naam','fase-log'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('fase-status').value='gepland';
+    document.getElementById('fase-sw').value='';
+    document.getElementById('fase-ew').value='';
+    document.getElementById('fase-prog').value='0';
+    document.getElementById('fase-del-btn').style.display='none';
+    buildContactDropdown('fase-resp-wrap','');
+  }
+  openModal('m-fase');
+}
+function saveFase(){
+  const id=document.getElementById('fase-id').value;
+  const naam=document.getElementById('fase-naam').value.trim();
+  if(!naam){alert('Geef een naam op');return}
+  const respId=document.getElementById('fase-resp-wrap-sel')?.value||'';
+  const validRespId=respId&&respId!=='__new__'?respId:null;
+  const data={naam,
+    respId:validRespId,
+    resp:validRespId?contactNaam(validRespId):'',
+    status:document.getElementById('fase-status').value,
+    sw:parseInt(document.getElementById('fase-sw').value)||1,
+    ew:parseInt(document.getElementById('fase-ew').value)||4,
+    prog:Math.min(100,Math.max(0,parseInt(document.getElementById('fase-prog').value)||0)),
+    log:document.getElementById('fase-log').value.trim()};
+  if(id){const i=S.fases.findIndex(x=>x.id===id);if(i>=0)Object.assign(S.fases[i],data);}
+  else S.fases.push({id:uid(),...data});
+  save();closeModal('m-fase');render();toast('Fase opgeslagen');
+}
+function deleteFase(){
+  const id=document.getElementById('fase-id').value;
+  if(!confirm('Fase verwijderen?'))return;
+  S.fases=S.fases.filter(f=>f.id!==id);
+  save();closeModal('m-fase');render();toast('Fase verwijderd');
+}
+
+// ──────────────────────────────────────────
+// RUIMTES
+// ──────────────────────────────────────────
+const CATS={ruwbouw:'Ruwbouw',installaties:'Installaties',afwerking:'Afwerking',overig:'Overig'};
+function renderRuimtes(){
+  let h=`<div class="shd"><h2>Ruimtes</h2>
+    <div class="fca g8" style="flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="toggleAllRuimtes(false)">Inklappen</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleAllRuimtes(true)">Uitklappen</button>
+      <button class="btn btn-ghost btn-sm ${_bulkMode?'btn-p':''}" onclick="toggleBulkMode()" style="${_bulkMode?'background:var(--acc);color:white':''}">
+        ${_bulkMode?'✓ Selectie uit':'☑ Selecteer'}
+      </button>
+      <button class="btn btn-p btn-sm" onclick="openModal('m-ruimte')">+ Ruimte</button>
+    </div>
+  </div>
+  <div class="rgrid">`;
+
+  S.ruimtes.forEach(r=>{
+    const done=(r.items||[]).filter(i=>i.done).length, tot=(r.items||[]).length;
+    const actie=(r.items||[]).filter(i=>i.actie&&!i.done);
+    const p=pct(done,tot);
+    const c=p===100?'grn':p>50?'acc':'blu';
+    const rKosten=S.kosten.filter(k=>k.type==='ruimte'&&k.rid===r.id);
+    const rTot=rKosten.reduce((s,k)=>s+Number(k.bedrag||0),0);
+
+    h+=`<div class="rcard">
+      <div class="rhd" onclick="toggleRuimte('${r.id}')">
+        <div style="flex:1">
+          <div class="fb">
+            <div class="rname">${esc(r.naam)}</div>
+            <div class="fca g8">
+              ${rTot?`<span class="sl">${fmt(rTot)}</span>`:''}
+              <span class="bold ${c}" style="font-size:13px">${p}%</span>
+              <span style="color:var(--mut2);font-size:16px">${r.open?'▲':'▼'}</span>
+            </div>
+          </div>
+          <div class="fca g8 mt6">
+            <div class="pbar" style="flex:1"><div class="pfill pf-${c}" style="width:${p}%"></div></div>
+            <span class="sl">${done}/${tot}</span>
+            ${actie.length?`<span style="font-size:11px;color:var(--red);font-weight:700;background:var(--red-lt);padding:2px 8px;border-radius:8px">⚡ ${actie.length} actie${actie.length>1?'s':''}</span>`:''}
+          </div>
+        </div>
+      </div>
+      <div class="rbody ${r.open?'open':''}" id="rbody-${r.id}">`;
+
+    // Actie-banner bovenaan
+    if(actie.length){
+      h+=`<div class="acties-banner">
+        <div class="ab-title">⚡ Vereist jouw actie</div>
+        ${actie.map(i=>`<div class="ab-item">› ${esc(i.naam)}</div>`).join('')}
+      </div>`;
+    }
+
+    // Items per categorie
+    const catOrder=['ruwbouw','installaties','afwerking','overig'];
+    catOrder.forEach(cat=>{
+      const catItems=(r.items||[]).filter(i=>(i.cat||'overig')===cat);
+      if(!catItems.length)return;
+      h+=`<div class="cat-group"><div class="cat-label">${CATS[cat]}</div>`;
+      catItems.forEach(i=>{
+        const bulkKey=`${r.id}:${i.id}`;
+        const isBulkSel=_bulkSel.has(bulkKey);
+        const fase=i.faseId?S.fases.find(f=>f.id===i.faseId):null;
+        h+=`<div class="ci prio-${i.prio} ${i.done?'done':''} ${isBulkSel?'bulk-selected':''}" id="ci-${i.id}">
+          ${_bulkMode
+            ?`<input type="checkbox" class="ci-check" ${isBulkSel?'checked':''} onchange="toggleBulkItem('${r.id}','${i.id}',this.checked)">`
+            :`<input type="checkbox" ${i.done?'checked':''} onchange="toggleItem('${r.id}','${i.id}',this.checked)">`}
+          <div class="cim">
+            <div class="cin">${esc(i.naam)}</div>
+            <div class="cimeta">
+              <span class="tag t-${i.prio}">${i.prio}</span>
+              ${i.respId?`<span class="cinote" style="color:var(--acc);font-style:normal;font-weight:600">👤 ${esc(contactNaam(i.respId))}</span>`:''}
+              ${i.budget?`<span class="item-budget">€${i.budget.toLocaleString('nl-NL')}</span>`:''}
+              ${fase?`<span class="cinote" style="color:var(--blu)">📅 ${esc(fase.naam)}</span>`:''}
+              ${i.mat?`<span class="cinote">📦 ${esc(i.mat)}</span>`:''}
+              ${i.actie&&!i.done?`<span class="ciactie">⚡ actie vereist</span>`:''}
+            </div>
+            ${i.notitie?`<div class="item-notitie">${esc(i.notitie)}</div>`:''}
+          </div>
+          <div style="display:flex;gap:2px;flex-shrink:0">
+            <button class="ibtn" onclick="duplicateItem('${r.id}','${i.id}')" title="Dupliceren" style="font-size:13px">⧉</button>
+            <button class="ibtn" onclick="openItemModal('${r.id}','${i.id}')" title="Bewerken">✏️</button>
+          </div>
+        </div>`;
+      });
+      h+=`</div>`;
+    });
+
+    // Documenten
+    h+=`<div class="divider"></div>
+      <div class="fb mb8">
+        <div class="ctitle" style="margin:0">Documenten</div>
+        <button class="btn btn-ghost btn-xs" onclick="openDocModal('${r.id}')">+ Link</button>
+      </div>`;
+    if(r.docs&&r.docs.length){
+      r.docs.forEach(d=>{
+        h+=`<div class="ditem">🔗<a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.naam)}</a>
+          <button class="ibtn" style="font-size:12px" onclick="deleteDoc('${r.id}','${d.id}')">✕</button></div>`;
+      });
+    } else {
+      h+=`<div class="sl" style="padding:4px 0">Geen documenten</div>`;
+    }
+
+    // Kosten
+    h+=`<div class="divider"></div>
+      <div class="fb mb8">
+        <div class="ctitle" style="margin:0">Kosten <strong>${fmt(rTot)}</strong></div>
+        <button class="btn btn-ghost btn-xs" onclick="openKostModal(null,'${r.id}')">+ Kost</button>
+      </div>`;
+    rKosten.forEach(k=>{
+      h+=`<div class="kost-row">
+        <span style="font-size:13px">${esc(k.naam)}</span>
+        <span class="fca g6"><strong>${fmt(k.bedrag)}</strong><button class="ibtn" style="font-size:12px" onclick="openKostModal('${k.id}')">✏️</button></span>
+      </div>`;
+    });
+
+    // Add item button
+    h+=`<div class="mt12"><button class="btn btn-g btn-sm" onclick="openItemModal('${r.id}')">+ Checklist item</button></div>`;
+
+    h+=`</div></div>`;
+  });
+
+  h+=`</div>`;
+  document.getElementById('tab-ruimtes').innerHTML=h;
+}
+
+function toggleRuimte(id){const r=S.ruimtes.find(x=>x.id===id);if(r){r.open=!r.open;save();renderRuimtes()}}
+function toggleAllRuimtes(open){S.ruimtes.forEach(r=>r.open=open);save();renderRuimtes()}
+function toggleItem(rid,iid,val){
+  const r=S.ruimtes.find(x=>x.id===rid);if(!r)return;
+  const i=r.items.find(x=>x.id===iid);if(i){i.done=val;save();render();}
+}
+function saveRuimte(){
+  const naam=document.getElementById('ruimte-naam').value.trim();if(!naam)return;
+  S.ruimtes.push({id:uid(),naam,open:true,items:[],docs:[]});
+  document.getElementById('ruimte-naam').value='';
+  save();closeModal('m-ruimte');render();toast('Ruimte toegevoegd');
+}
+function _fillItemRoomOptions(currentRid){
+  // Verplaatsen dropdown
+  const mv=document.getElementById('item-move-to');
+  mv.innerHTML=`<option value="">— niet verplaatsen —</option>`+
+    S.ruimtes.filter(r=>r.id!==currentRid).map(r=>`<option value="${r.id}">${esc(r.naam)}</option>`).join('');
+  // Kopiëren checkboxes
+  const cp=document.getElementById('item-copy-rooms');
+  cp.innerHTML=S.ruimtes.filter(r=>r.id!==currentRid).map(r=>
+    `<label style="display:flex;align-items:center;gap:7px;padding:4px 0;font-size:13px;cursor:pointer">
+      <input type="checkbox" value="${r.id}" style="margin:0;accent-color:var(--acc)"> ${esc(r.naam)}
+    </label>`).join('');
+  // Fase dropdown
+  const fs=document.getElementById('item-fase-id');
+  fs.innerHTML=`<option value="">— geen —</option>`+
+    S.fases.map(f=>`<option value="${f.id}">${esc(f.naam)}</option>`).join('');
+}
+
+function openItemModal(rid,iid){
+  document.getElementById('item-rid').value=rid;
+  document.getElementById('item-id').value=iid||'';
+  _fillItemRoomOptions(rid);
+  if(iid){
+    const r=S.ruimtes.find(x=>x.id===rid);
+    const i=r&&r.items.find(x=>x.id===iid);if(!i)return;
+    document.getElementById('m-item-title').textContent='Item bewerken';
+    document.getElementById('item-naam').value=i.naam;
+    document.getElementById('item-cat').value=i.cat||'overig';
+    document.getElementById('item-prio').value=i.prio||'normaal';
+    document.getElementById('item-mat').value=i.mat||'';
+    document.getElementById('item-notitie').value=i.notitie||'';
+    document.getElementById('item-budget').value=i.budget||'';
+    document.getElementById('item-fase-id').value=i.faseId||'';
+    document.getElementById('item-actie').checked=!!i.actie;
+    document.getElementById('item-del-btn').style.display='inline-flex';
+    buildContactDropdown('item-resp-wrap',i.respId||'');
+  } else {
+    document.getElementById('m-item-title').textContent='Item toevoegen';
+    ['item-naam','item-mat','item-notitie','item-budget'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('item-cat').value='overig';
+    document.getElementById('item-prio').value='normaal';
+    document.getElementById('item-actie').checked=false;
+    document.getElementById('item-del-btn').style.display='none';
+    document.getElementById('item-move-to').value='';
+    buildContactDropdown('item-resp-wrap','');
+  }
+  openModal('m-item');
+}
+
+function saveItem(){
+  const rid=document.getElementById('item-rid').value;
+  const iid=document.getElementById('item-id').value;
+  const naam=document.getElementById('item-naam').value.trim();
+  if(!naam){alert('Geef een naam op');return}
+  const r=S.ruimtes.find(x=>x.id===rid);if(!r)return;
+  const respId=document.getElementById('item-resp-wrap-sel')?.value||'';
+  const validRespId=respId&&respId!=='__new__'?respId:null;
+  const faseId=document.getElementById('item-fase-id').value||null;
+  const moveTo=document.getElementById('item-move-to').value;
+  const data={naam,cat:document.getElementById('item-cat').value,
+    prio:document.getElementById('item-prio').value,
+    mat:document.getElementById('item-mat').value.trim(),
+    notitie:document.getElementById('item-notitie').value.trim(),
+    budget:parseFloat(document.getElementById('item-budget').value)||0,
+    faseId,actie:document.getElementById('item-actie').checked,respId:validRespId};
+
+  if(iid){
+    const i=r.items.find(x=>x.id===iid);
+    if(i){Object.assign(i,data);}
+    // Verplaatsen
+    if(moveTo){
+      const targetR=S.ruimtes.find(x=>x.id===moveTo);
+      if(targetR){
+        r.items=r.items.filter(x=>x.id!==iid);
+        targetR.items.push(i);
+        toast(`Verplaatst naar ${targetR.naam}`);
+      }
+    }
+  } else {
+    const newItem={id:uid(),done:false,...data};
+    r.items.push(newItem);
+    // Kopiëren naar geselecteerde ruimtes
+    const copies=[...document.querySelectorAll('#item-copy-rooms input:checked')].map(x=>x.value);
+    copies.forEach(crid=>{
+      const cr=S.ruimtes.find(x=>x.id===crid);
+      if(cr)cr.items.push({...newItem,id:uid()});
+    });
+    if(copies.length)toast(`Item toegevoegd aan ${copies.length+1} ruimtes`);
+  }
+  save();closeModal('m-item');render();
+  if(!moveTo)toast('Item opgeslagen');
+}
+
+function deleteItem(){
+  const rid=document.getElementById('item-rid').value,iid=document.getElementById('item-id').value;
+  if(!confirm('Item verwijderen?'))return;
+  const r=S.ruimtes.find(x=>x.id===rid);if(r)r.items=r.items.filter(x=>x.id!==iid);
+  save();closeModal('m-item');render();toast('Verwijderd');
+}
+
+// ── Duplicate item inline ────────────────
+function duplicateItem(rid,iid){
+  const r=S.ruimtes.find(x=>x.id===rid);if(!r)return;
+  const i=r.items.find(x=>x.id===iid);if(!i)return;
+  r.items.push({...i,id:uid(),done:false,naam:i.naam+' (kopie)'});
+  save();render();toast('Gedupliceerd');
+}
+function openDocModal(rid){
+  document.getElementById('doc-rid').value=rid;
+  ['doc-id','doc-naam','doc-url'].forEach(x=>document.getElementById(x).value='');
+  openModal('m-doc');
+}
+function saveDoc(){
+  const rid=document.getElementById('doc-rid').value;
+  const naam=document.getElementById('doc-naam').value.trim();
+  const url=document.getElementById('doc-url').value.trim();
+  if(!naam||!url){alert('Vul naam en URL in');return}
+  const r=S.ruimtes.find(x=>x.id===rid);if(!r)return;
+  if(!r.docs)r.docs=[];r.docs.push({id:uid(),naam,url});
+  save();closeModal('m-doc');render();toast('Document toegevoegd');
+}
+function deleteDoc(rid,did){
+  if(!confirm('Verwijderen?'))return;
+  const r=S.ruimtes.find(x=>x.id===rid);if(r)r.docs=r.docs.filter(d=>d.id!==did);
+  save();render();toast('Verwijderd');
+}
+
+// ──────────────────────────────────────────
+// BUDGET
+// ──────────────────────────────────────────
+function renderBudget(){
+  const budget=Number(S.settings.budget||0);
+  // Sluit subsidies uit van 'kosten' totaal
+  const kosten=S.kosten.filter(k=>k.type!=='subsidie');
+  const subsidieItems=S.kosten.filter(k=>k.type==='subsidie');
+  const rKosten=kosten.filter(k=>k.type==='ruimte').reduce((s,k)=>s+Number(k.bedrag||0),0);
+  const algKosten=kosten.filter(k=>k.type==='algemeen').reduce((s,k)=>s+Number(k.bedrag||0),0);
+  const meerwerkKosten=kosten.filter(k=>k.type==='meerwerk').reduce((s,k)=>s+Number(k.bedrag||0),0);
+  const subsidieTotal=subsidieItems.reduce((s,k)=>s+Number(k.bedrag||0),0);
+  const basisBesteed=rKosten+algKosten;
+  const basisBudget=budget;
+  const eindtotaal=basisBesteed+meerwerkKosten-subsidieTotal;
+  const resterend=Math.max(0,basisBudget-basisBesteed);
+  const over=basisBesteed>basisBudget?basisBesteed-basisBudget:0;
+  // Gebruik eindtotaal voor alle budget-vergelijkingen (incl. meerwerk, excl. subsidies)
+  const verschil=basisBudget-eindtotaal;           // negatief = over budget
+  const isOver=verschil<0;
+  const bpct=basisBudget?Math.round(eindtotaal/basisBudget*100):0;
+
+  // Betaalstatus — op basis van lifecycle
+  const betaaldItems=kosten.filter(k=>k.lifecycle==='betaald'||k.betaald==='betaald');
+  const betaaldAmt=betaaldItems.reduce((s,k)=>s+Number(k.bedrag||0),0);
+  // Termijn-gebaseerde "nog te betalen"
+  const termijnOpenstaand=kosten.reduce((s,k)=>{
+    if(!k.termijnen||!k.termijnen.length)return s;
+    return s+k.termijnen.filter(t=>!t.betaald).reduce((ts,t)=>ts+Number(t.bedrag||0),0);
+  },0);
+  const nogTeBetalen=termijnOpenstaand||kosten.filter(k=>k.lifecycle!=='betaald'&&k.betaald!=='betaald').reduce((s,k)=>s+Number(k.bedrag||0),0);
+
+  // BTW totaal
+  const btwTotaal=kosten.reduce((s,k)=>s+Number(k.btwBedrag||0),0);
+
+  // Geraamd vanuit taken
+  const geraamdTaken=S.ruimtes.flatMap(r=>r.items||[]).reduce((s,i)=>s+Number(i.budget||0),0);
+
+  // Helper: kost rij renderen
+  function kostRij(k,indent){
+    const lc=k.lifecycle||'raming';
+    const ct=k.contactId?(S.contacten||[]).find(c=>c.id===k.contactId):null;
+    const termPaid=k.termijnen&&k.termijnen.length?k.termijnen.filter(t=>t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0):null;
+    const termOpen=k.termijnen&&k.termijnen.length?k.termijnen.filter(t=>!t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0):null;
+    return `<div class="kost-row" ${indent?'style="padding-left:20px"':''}>
+      <div style="flex:1;min-width:0">
+        <div class="${indent?'mut':'bold'}" style="font-size:13px">${esc(k.naam)}</div>
+        <div class="fca g6 mt4" style="flex-wrap:wrap">
+          <span class="tag t-${lc}" style="font-size:10px">${lc}</span>
+          ${ct?`<span class="sl">👤 ${esc(ct.naam)}</span>`:''}
+          ${k.btwBedrag?`<span class="sl">BTW: ${fmt(k.btwBedrag)}</span>`:''}
+          ${termPaid!==null?`<span class="sl" style="color:var(--grn)">✓ ${fmt(termPaid)} betaald</span>`:''}
+          ${termOpen?`<span class="sl" style="color:var(--red)">⏳ ${fmt(termOpen)} open</span>`:''}
+          ${k.notitie?`<span class="sl" title="${esc(k.notitie)}">📝 ${esc(k.notitie.substring(0,40))}${k.notitie.length>40?'…':''}</span>`:''}
+        </div>
+      </div>
+      <span class="fca g6" style="flex-shrink:0">
+        <strong>${fmt(k.bedrag)}</strong>
+        <button class="ibtn" style="font-size:12px" onclick="openKostModal('${k.id}')">✏️</button>
+      </span>
+    </div>`;
+  }
+
+  let h=`<div class="shd"><h2>Budget</h2>
+    <button class="btn btn-p btn-sm" onclick="openKostModal()">+ Kostenpost</button>
+  </div>`;
+
+  if(!budget) h+=`<div class="ovr-banner mb12">⚠ Stel eerst een totaalbudget in via <span style="cursor:pointer;text-decoration:underline" onclick="openModalNaam()">Instellingen</span>.</div>`;
+  if(over) h+=`<div class="ovr-banner mb12">⚠ Basisbudget overschreden met ${fmt(over)}!</div>`;
+
+  // ── Hoofdkaart ──────────────────────────
+  // ── 5-koloms KPI header ──────────────────
+  // Rekensom: Uitgaven − Subsidies = Netto → vergelijk met Budget → Verschil
+  const nettoUitgaven = basisBesteed + meerwerkKosten; // voor subsidies
+  h+=`<div class="bud-total mb16">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0">
+
+      <!-- 1: Totaalbudget -->
+      <div style="padding:18px 20px;border-right:1px solid rgba(255,255,255,.08)">
+        <div class="bt-label">Totaalbudget</div>
+        <div class="bt-num">${fmt(basisBudget)}</div>
+        <button class="btn btn-sm mt8" style="background:rgba(255,255,255,.1);color:#e2e8f0;border:1px solid rgba(255,255,255,.2);font-size:11px" onclick="openModalNaam()">Aanpassen</button>
+      </div>
+
+      <!-- 2: Totaal uitgaven (incl. meerwerk, vóór subsidies) -->
+      <div style="padding:18px 20px;border-right:1px solid rgba(255,255,255,.08)">
+        <div class="bt-label">Totaal uitgaven</div>
+        <div class="bt-num">${fmt(nettoUitgaven)}</div>
+        <div class="bt-sub">
+          Basis ${fmt(basisBesteed)}${meerwerkKosten?` + meerwerk ${fmt(meerwerkKosten)}`:''}
+          ${btwTotaal?`<br>BTW totaal ${fmt(btwTotaal)}`:''}
+        </div>
+      </div>
+
+      <!-- 3: Subsidies / kortingen -->
+      <div style="padding:18px 20px;border-right:1px solid rgba(255,255,255,.08)">
+        <div class="bt-label">Subsidies & kortingen</div>
+        <div class="bt-num" style="color:${subsidieTotal?'#86efac':'#94a3b8'}">
+          ${subsidieTotal?`− ${fmt(subsidieTotal)}`:'—'}
+        </div>
+        <div class="bt-sub">${subsidieTotal?`Netto: ${fmt(eindtotaal)}`:'Geen subsidies ingesteld'}</div>
+      </div>
+
+      <!-- 4: Verschil (over/resterend) -->
+      <div style="padding:18px 20px;border-right:1px solid rgba(255,255,255,.08)">
+        <div class="bt-label">${isOver?'Over budget':'Resterend'}</div>
+        <div class="bt-num" style="color:${isOver?'#fca5a5':'#86efac'}">
+          ${isOver?'− '+fmt(-verschil):'+'+fmt(verschil)}
+        </div>
+        <div class="bt-sub">${bpct}% van budget besteed</div>
+      </div>
+
+      <!-- 5: Nog te betalen -->
+      <div style="padding:18px 20px">
+        <div class="bt-label">Nog te betalen</div>
+        <div class="bt-num" style="color:${nogTeBetalen>0?'#fca5a5':'#86efac'}">
+          ${fmt(nogTeBetalen)}
+        </div>
+        <div class="bt-sub">${fmt(betaaldAmt)} al betaald</div>
+      </div>
+
+    </div>
+
+    <!-- Progressiebalk -->
+    <div style="padding:0 20px 16px">
+      <div class="bseg-wrap" style="margin-top:14px;height:8px">
+        ${basisBudget?`
+          <div class="bseg bs-r" style="flex:${rKosten}" title="Ruimtes ${fmt(rKosten)}"></div>
+          <div class="bseg bs-a" style="flex:${algKosten}" title="Algemeen ${fmt(algKosten)}"></div>
+          <div class="bseg bs-m" style="flex:${meerwerkKosten}" title="Meerwerk ${fmt(meerwerkKosten)}"></div>
+          <div class="bseg" style="flex:${subsidieTotal};background:#10b981" title="Subsidie −${fmt(subsidieTotal)}"></div>
+          <div class="bseg bs-v" style="flex:${Math.max(0,verschil)}" title="Resterend ${fmt(Math.max(0,verschil))}"></div>
+        `:``}
+      </div>
+      <div class="fca g12 mt8" style="font-size:11px;color:#94a3b8;flex-wrap:wrap">
+        <span>🟡 Ruimtes ${fmt(rKosten)}</span>
+        <span>🔵 Algemeen ${fmt(algKosten)}</span>
+        ${meerwerkKosten?`<span>🔴 Meerwerk ${fmt(meerwerkKosten)}</span>`:''}
+        ${subsidieTotal?`<span>🟢 Subsidie −${fmt(subsidieTotal)}</span>`:''}
+        <span style="color:${isOver?'#fca5a5':'#94a3b8'}">${isOver?'🔴 Over budget '+fmt(-verschil):'⬜ Vrij '+fmt(verschil)}</span>
+      </div>
+    </div>
+  </div>`;
+
+  // ── Geraamd vs offerte ───────────────────
+  h+=`<div class="g2 mb16">
+    <div class="card">
+      <div class="ctitle" style="color:${nogTeBetalen?'var(--red)':'var(--grn)'}">💳 Betalingsstatus</div>
+      <div class="bignum ${nogTeBetalen>0?'red':'grn'}">${fmt(nogTeBetalen)}</div>
+      <div class="sl mt4">nog te betalen</div>
+      <div class="sl mt4">${fmt(betaaldAmt)} al betaald</div>
+    </div>
+    ${geraamdTaken>0?`<div class="card">
+      <div class="ctitle">📐 Geraamd vs offerte</div>
+      ${(()=>{const d=geraamdTaken-basisBesteed;const c=Math.abs(d)<1000?'grn':d>0?'red':'grn';
+        return`<div class="budget-compare" style="grid-template-columns:1fr 1fr">
+          <div class="bc-cell"><div class="bc-val">${fmt(geraamdTaken)}</div><div class="bc-lbl">Geraamd (taken)</div></div>
+          <div class="bc-cell" style="background:var(--${c}-lt)"><div class="bc-val" style="color:var(--${c})">${d>=0?'+':''}${fmt(d)}</div><div class="bc-lbl">${Math.abs(d)<1000?'Klopt goed':d>0?'Offerte hoger':'Meevaller'}</div></div>
+        </div>`;})()}
+    </div>`:``}
+  </div>`;
+
+  // ── Cashflow overzicht ───────────────────
+  const allTermijnen=[];
+  S.kosten.forEach(k=>{
+    if(k.termijnen&&k.termijnen.length){
+      k.termijnen.forEach(t=>allTermijnen.push({...t,kostNaam:k.naam,contactId:k.contactId}));
+    }
+  });
+  if(allTermijnen.length){
+    allTermijnen.sort((a,b)=>(!a.datum?1:!b.datum?-1:a.datum.localeCompare(b.datum)));
+    const byMonth={};
+    allTermijnen.forEach(t=>{
+      const key=t.datum?t.datum.substring(0,7):'Geen datum';
+      if(!byMonth[key])byMonth[key]=[];
+      byMonth[key].push(t);
+    });
+    h+=`<div class="bud-section mb14">
+      <div class="bud-sec-hd" onclick="this.nextElementSibling.classList.toggle('open')">
+        <h3>📅 Cashflow — betaalschema</h3>
+        <span class="bold">${allTermijnen.length} termijnen</span>
+      </div>
+      <div class="bud-sec-body open" style="padding:14px 18px">`;
+    Object.keys(byMonth).sort().forEach(key=>{
+      const items=byMonth[key];
+      const maandTotaal=items.reduce((s,t)=>s+Number(t.bedrag||0),0);
+      const maandLabel=key==='Geen datum'?'Geen datum':new Date(key+'-01').toLocaleDateString('nl-NL',{month:'long',year:'numeric'});
+      h+=`<div class="cf-month"><div class="cf-month-hd">${maandLabel} — <strong>${fmt(maandTotaal)}</strong></div>`;
+      items.forEach(t=>{
+        const ct=t.contactId?(S.contacten||[]).find(c=>c.id===t.contactId):null;
+        h+=`<div class="cf-row ${t.betaald?'cf-paid':''}">
+          <div class="cf-info">
+            <div class="cf-name">${esc(t.omschrijving||t.kostNaam)}</div>
+            <div class="cf-sub">${esc(t.kostNaam)}${ct?` · ${esc(ct.naam)}`:''} ${t.betaald?'· ✓ Betaald':''}</div>
+          </div>
+          <div class="cf-amt ${t.betaald?'grn':''}">${fmt(t.bedrag)}</div>
+        </div>`;
+      });
+      h+=`</div>`;
+    });
+    h+=`</div></div>`;
+  }
+
+  // ── Kostenposten per categorie ───────────
+  const sectionDef=[
+    {type:'ruimte',label:'Kosten per ruimte',kleur:'#f59e0b',addFn:`openKostModal(null,null,'ruimte')`},
+    {type:'algemeen',label:'Algemene kosten',kleur:'#3b82f6',addFn:`openKostModal(null,null,'algemeen')`},
+    {type:'meerwerk',label:'Meerwerk',kleur:'#ef4444',addFn:`openKostModal(null,null,'meerwerk')`},
+    {type:'subsidie',label:'Subsidies & kortingen',kleur:'#10b981',addFn:`openKostModal(null,null,'subsidie')`},
+  ];
+  sectionDef.forEach(({type,label,kleur,addFn})=>{
+    const items=S.kosten.filter(k=>k.type===type);
+    const tot=items.reduce((s,k)=>s+Number(k.bedrag||0),0);
+    const sign=type==='subsidie'?'− ':'';
+    h+=`<div class="bud-section">
+      <div class="bud-sec-hd" onclick="this.nextElementSibling.classList.toggle('open')">
+        <h3><span style="width:12px;height:12px;border-radius:50%;background:${kleur};display:inline-block"></span> ${label}</h3>
+        <span class="fca g8"><strong>${sign}${fmt(tot)}</strong><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();${addFn}">+</button></span>
+      </div>
+      <div class="bud-sec-body open">`;
+    if(!items.length){h+=`<div class="sl">Geen posten</div>`;}
+    if(type==='ruimte'){
+      // Groepeer per ruimte
+      S.ruimtes.forEach(r=>{
+        // Vind posten die (deels) aan deze ruimte hangen
+        const rItems=S.kosten.filter(k=>k.type==='ruimte'&&(k.rid===r.id||(k.rids&&k.rids.find(x=>x.rid===r.id))));
+        const rTot=rItems.reduce((s,k)=>{
+          if(k.rids&&k.rids.length>1){
+            const pct=(k.rids.find(x=>x.rid===r.id)?.pct||0)/100;
+            return s+Number(k.bedrag||0)*pct;
+          }
+          return s+Number(k.bedrag||0);
+        },0);
+        if(!rItems.length&&!rTot)return;
+        h+=`<div class="fb mb4" style="padding:8px 12px;background:var(--surf2);border-radius:var(--rsm)">
+          <span class="bold">${esc(r.naam)}</span>
+          <span class="fca g8"><strong>${fmt(rTot)}</strong>
+            <button class="ibtn" style="font-size:13px" onclick="openKostModal(null,'${r.id}')">＋</button></span>
+        </div>`;
+        rItems.forEach(k=>{
+          const split=k.rids&&k.rids.length>1?` (${k.rids.find(x=>x.rid===r.id)?.pct||0}%)`:null;
+          h+=kostRij({...k,naam:k.naam+(split?` ${split}`:'')},true);
+        });
+      });
+      // Kosten met type='ruimte' maar zonder geldige kamer-koppeling
+      const allRids=S.ruimtes.map(r=>r.id);
+      const orphaned=S.kosten.filter(k=>k.type==='ruimte'&&!allRids.includes(k.rid)&&!(k.rids&&k.rids.some(x=>allRids.includes(x.rid))));
+      if(orphaned.length){
+        h+=`<div class="fb mb4 mt8" style="padding:8px 12px;background:var(--red-lt);border-radius:var(--rsm);border-left:3px solid var(--red)">
+          <span style="font-size:13px;color:var(--red);font-weight:600">⚠ Niet gekoppeld aan kamer</span>
+          <span class="sl" style="color:var(--red)">${fmt(orphaned.reduce((s,k)=>s+Number(k.bedrag||0),0))}</span>
+        </div>`;
+        orphaned.forEach(k=>h+=kostRij(k,true));
+      }
+    } else {
+      items.forEach(k=>h+=kostRij(k,false));
+    }
+    h+=`</div></div>`;
+  });
+
+  document.getElementById('tab-budget').innerHTML=h;
+}
+
+// ── Lifecycle & Termijn state ─────────────
+let _kostLifecycle='raming';
+let _termijnenTemp=[];
+
+// ── BTW helper ────────────────────────────
+function btwCalc(bedrag,pct,isIncl){
+  const p=Number(pct)||0,b=Number(bedrag)||0;
+  if(!isIncl){const btw=Math.round(b*p)/100;return{excl:b,btw,incl:b+btw};}
+  const excl=Math.round(b/(1+p/100)*100)/100;
+  const btw=Math.round((b-excl)*100)/100;
+  return{excl,btw,incl:b};
+}
+
+function updateBtwPreview(){
+  const bedrag=parseFloat(document.getElementById('kost-bedrag')?.value)||0;
+  const pct=parseInt(document.getElementById('kost-btw')?.value)||0;
+  const isIncl=document.getElementById('kost-btw-incl')?.value==='incl';
+  const prev=document.getElementById('kost-btw-preview');
+  if(!prev)return;
+  if(!bedrag||!pct){prev.style.display='none';return;}
+  const {excl,btw,incl}=btwCalc(bedrag,pct,isIncl);
+  prev.style.display='block';
+  prev.innerHTML=`<strong>${fmt(excl)}</strong> excl. + <strong>${fmt(btw)}</strong> BTW (${pct}%) = <strong style="color:var(--acc-dk)">${fmt(incl)} incl. BTW</strong>`;
+}
+
+// ── Lifecycle buttons ─────────────────────
+function renderLifecycleBtns(current){
+  const wrap=document.getElementById('kost-lifecycle-wrap');if(!wrap)return;
+  const opts=[['raming','Raming'],['offerte','Offerte'],['factuur','Factuur'],['betaald','Betaald ✓']];
+  wrap.innerHTML=opts.map(([v,l])=>
+    `<button class="stbtn st-${v} ${(current||'raming')===v?'on':''}" onclick="setKostLC('${v}')">${l}</button>`
+  ).join('');
+  _kostLifecycle=current||'raming';
+}
+function setKostLC(v){_kostLifecycle=v;renderLifecycleBtns(v);}
+
+// ── Ruimte checkboxes ─────────────────────
+function renderRuimteCheckboxes(currentRids){
+  const list=document.getElementById('kost-ruimtes-list');if(!list)return;
+  list.innerHTML=S.ruimtes.map(r=>{
+    const checked=currentRids&&currentRids.find(x=>x.rid===r.id);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer">
+      <input type="checkbox" value="${r.id}" ${checked?'checked':''} style="margin:0;accent-color:var(--acc)" onchange="updateRuimteVerdeling()">
+      ${esc(r.naam)}
+    </label>`;
+  }).join('');
+  updateRuimteVerdeling(currentRids);
+}
+
+function updateRuimteVerdeling(existingRids){
+  const checked=[...document.querySelectorAll('#kost-ruimtes-list input:checked')];
+  const wrap=document.getElementById('kost-verdeling-wrap');
+  const verd=document.getElementById('kost-verdeling');
+  if(!wrap||!verd)return;
+  if(checked.length<=1){wrap.style.display='none';return;}
+  wrap.style.display='block';
+  const equalPct=Math.round(100/checked.length);
+  verd.innerHTML=checked.map((cb,i)=>{
+    const rid=cb.value;
+    const r=S.ruimtes.find(x=>x.id===rid);
+    const existing=existingRids&&existingRids.find(x=>x.rid===rid);
+    const pct=existing?existing.pct:(i===checked.length-1?100-equalPct*(checked.length-1):equalPct);
+    return `<div class="verd-row">
+      <span style="flex:1">${esc(r?.naam||rid)}</span>
+      <input type="number" id="verd-${rid}" value="${pct}" min="0" max="100" step="1"
+        oninput="checkVerdelingTotal()">
+      <span class="mut">%</span>
+    </div>`;
+  }).join('');
+  checkVerdelingTotal();
+}
+
+function checkVerdelingTotal(){
+  const inputs=[...document.querySelectorAll('[id^="verd-"]')];
+  const total=inputs.reduce((s,el)=>s+Number(el.value)||0,0);
+  let warn=document.getElementById('verd-warn');
+  if(!warn){warn=document.createElement('div');warn.id='verd-warn';document.getElementById('kost-verdeling').appendChild(warn);}
+  warn.innerHTML=total!==100?`<span style="color:var(--red);font-size:12px">⚠ Totaal: ${total}% (moet 100% zijn)</span>`:`<span style="color:var(--grn);font-size:12px">✓ Totaal: 100%</span>`;
+}
+
+// ── Termijnen ─────────────────────────────
+function addTermijn(){
+  _termijnenTemp.push({id:uid(),datum:'',omschrijving:'',bedrag:0,betaald:false});
+  renderTermijnen();
+}
+function removeTermijn(tid){
+  _termijnenTemp=_termijnenTemp.filter(t=>t.id!==tid);
+  renderTermijnen();
+}
+function renderTermijnen(){
+  const el=document.getElementById('kost-termijnen');if(!el)return;
+  if(!_termijnenTemp.length){
+    el.innerHTML=`<div class="sl" style="padding:6px 0;color:var(--mut2);font-size:12px">Geen termijnen — gebruik dit voor facturen in tranches</div>`;
+    return;
+  }
+  const total=_termijnenTemp.reduce((s,t)=>s+Number(t.bedrag)||0,0);
+  el.innerHTML=_termijnenTemp.map((t,i)=>`
+    <div class="termijn-row">
+      <input type="date" value="${t.datum||''}" style="flex:1;min-width:130px" oninput="_termijnenTemp[${i}].datum=this.value">
+      <input type="text" value="${esc(t.omschrijving||'')}" placeholder="Omschrijving (bijv. 1e termijn)" style="flex:2;min-width:120px" oninput="_termijnenTemp[${i}].omschrijving=this.value">
+      <input type="number" value="${t.bedrag||''}" placeholder="€" style="flex:0.8;min-width:80px" oninput="_termijnenTemp[${i}].bedrag=Number(this.value)||0;updateTermijnTotal()">
+      <label class="fca g4" style="flex-shrink:0;font-size:12px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" ${t.betaald?'checked':''} onchange="_termijnenTemp[${i}].betaald=this.checked" style="margin:0;accent-color:var(--grn)"> Betaald
+      </label>
+      <button class="ibtn" onclick="removeTermijn('${t.id}')" style="color:var(--red);padding:3px 6px;font-size:14px">✕</button>
+    </div>`).join('')+
+    `<div id="termijn-total" style="font-size:12px;padding:4px 0;color:var(--mut)">Totaal termijnen: <strong>${fmt(total)}</strong></div>`;
+}
+function updateTermijnTotal(){
+  const total=_termijnenTemp.reduce((s,t)=>s+Number(t.bedrag)||0,0);
+  const el=document.getElementById('termijn-total');
+  if(el)el.innerHTML=`Totaal termijnen: <strong>${fmt(total)}</strong>`;
+}
+
+// ── Open/Save/Delete Kost ─────────────────
+function kostTypeChange(){
+  const type=document.getElementById('kost-type')?.value;
+  const rf=document.getElementById('kost-ruimte-ff');
+  if(rf)rf.style.display=type==='ruimte'?'block':'none';
+}
+
+function openKostModal(id,rid,type){
+  document.getElementById('m-kost-title').textContent=id?'Kostenpost bewerken':'Kostenpost toevoegen';
+  ['kost-id','kost-naam','kost-bedrag','kost-notitie'].forEach(x=>document.getElementById(x)&&(document.getElementById(x).value=''));
+  document.getElementById('kost-btw').value='21';
+  document.getElementById('kost-btw-incl').value='incl';
+  document.getElementById('kost-btw-preview').style.display='none';
+  document.getElementById('kost-del-btn').style.display='none';
+  _termijnenTemp=[];
+  renderLifecycleBtns('raming');
+  buildContactDropdown('kost-contact-wrap','');
+
+  if(id){
+    const k=S.kosten.find(x=>x.id===id);if(!k)return;
+    document.getElementById('kost-id').value=k.id;
+    document.getElementById('kost-naam').value=k.naam;
+    document.getElementById('kost-bedrag').value=k.bedrag;
+    document.getElementById('kost-btw').value=k.btwPct??0;
+    document.getElementById('kost-btw-incl').value=k.btwIncl===false?'excl':'incl';
+    document.getElementById('kost-notitie').value=k.notitie||'';
+    document.getElementById('kost-type').value=k.type;
+    document.getElementById('kost-del-btn').style.display='inline-flex';
+    renderLifecycleBtns(k.lifecycle||'raming');
+    buildContactDropdown('kost-contact-wrap',k.contactId||'');
+    _termijnenTemp=(k.termijnen||[]).map(t=>({...t}));
+    kostTypeChange();
+    renderRuimteCheckboxes(k.rids||(k.rid?[{rid:k.rid,pct:100}]:[]));
+    updateBtwPreview();
+  } else {
+    document.getElementById('kost-type').value=type||'algemeen';
+    kostTypeChange();
+    renderRuimteCheckboxes(rid?[{rid,pct:100}]:[]);
+    if(rid)document.getElementById('kost-type').value='ruimte',kostTypeChange();
+  }
+  renderTermijnen();
+  openModal('m-kost');
+}
+
+function saveKost(){
+  const id=document.getElementById('kost-id').value;
+  const naam=document.getElementById('kost-naam').value.trim();
+  if(!naam){alert('Geef een naam op');return;}
+
+  const ingevoerd=parseFloat(document.getElementById('kost-bedrag').value)||0;
+  const btwPct=parseInt(document.getElementById('kost-btw').value)||0;
+  const isIncl=document.getElementById('kost-btw-incl').value==='incl';
+  const {excl:bedragExcl,btw:btwBedrag,incl:bedrag}=btwCalc(ingevoerd,btwPct,isIncl);
+  const type=document.getElementById('kost-type').value;
+  const notitie=document.getElementById('kost-notitie').value.trim();
+  const contactId=document.getElementById('kost-contact-wrap-sel')?.value||null;
+  const validContactId=contactId&&contactId!=='__new__'?contactId:null;
+
+  // Ruimte(s)
+  let rid=null,rids=null;
+  if(type==='ruimte'){
+    const checked=[...document.querySelectorAll('#kost-ruimtes-list input:checked')];
+    if(checked.length===1){
+      rid=checked[0].value;
+      rids=[{rid,pct:100}];
+    } else if(checked.length>1){
+      rids=checked.map(cb=>{
+        const pctEl=document.getElementById('verd-'+cb.value);
+        return{rid:cb.value,pct:pctEl?Number(pctEl.value)||0:Math.round(100/checked.length)};
+      });
+      rid=rids[0].rid;
+    }
+  }
+
+  const data={naam,bedrag,bedragExcl,btwBedrag,btwPct,btwIncl:isIncl,type,rid,rids,
+    lifecycle:_kostLifecycle,contactId:validContactId,notitie,
+    termijnen:_termijnenTemp.map(t=>({...t}))};
+
+  if(id){const i=S.kosten.findIndex(x=>x.id===id);if(i>=0)Object.assign(S.kosten[i],data);}
+  else S.kosten.push({id:uid(),...data});
+  save();closeModal('m-kost');render();toast('Kostenpost opgeslagen');
+}
+
+function deleteKost(){
+  const id=document.getElementById('kost-id').value;
+  if(!confirm('Kostenpost verwijderen?'))return;
+  S.kosten=S.kosten.filter(k=>k.id!==id);
+  save();closeModal('m-kost');render();toast('Verwijderd');
+}
+
+// ──────────────────────────────────────────
+// BESLISSINGEN
+// ──────────────────────────────────────────
+function renderBes(){
+  const cw=currentWeek();
+  const open=S.beslissingen.filter(b=>b.status==='open');
+  const rest=S.beslissingen.filter(b=>b.status!=='open');
+
+  let h=`<div class="shd"><h2>Beslissingen</h2>
+    <button class="btn btn-p btn-sm" onclick="openBesModal()">+ Beslissing</button>
+  </div>`;
+
+  if(!S.beslissingen.length){
+    h+=`<div class="empty"><div class="ei">❓</div><p>Nog geen beslissingen.<br>Voeg open punten toe die taken blokkeren.</p></div>`;
+  }
+
+  if(open.length){
+    h+=`<div class="mb4" style="font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Open (${open.length})</div>`;
+    open.sort((a,b)=>{
+      // urgent first: geblokkeerde fase is bezig
+      const ua=a.faseId&&S.fases.find(f=>f.id===a.faseId)?.status==='bezig';
+      const ub=b.faseId&&S.fases.find(f=>f.id===b.faseId)?.status==='bezig';
+      if(ua&&!ub)return -1;if(!ua&&ub)return 1;
+      return (a.deadline||99)-(b.deadline||99);
+    }).forEach(b=>h+=besBullet(b,cw));
+  }
+  if(rest.length){
+    h+=`<div class="${open.length?'mt20':''} mb4" style="font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Afgehandeld (${rest.length})</div>`;
+    rest.forEach(b=>h+=besBullet(b,cw));
+  }
+
+  document.getElementById('tab-beslissingen').innerHTML=h;
+}
+
+function besBullet(b,cw){
+  const fase=b.faseId?S.fases.find(f=>f.id===b.faseId):null;
+  const urgent=fase&&fase.status==='bezig'&&b.status==='open';
+  const dlPast=b.deadline&&b.deadline<cw;
+
+  return `<div class="bes-card ${urgent?'bes-urgent':''}">
+    <div class="bes-inner">
+      <div class="bes-top">
+        <div style="flex:1">
+          <div class="bes-desc">${esc(b.desc)}</div>
+          <div class="bes-meta">
+            ${urgent?`<span class="tag t-urgent">⚡ Urgent — blokkeert actieve fase</span>`:''}
+            ${fase?`<span class="bes-blok">⛔ Blokkeert: ${esc(fase.naam)}</span>`:''}
+            ${b.deadline?`<span class="bes-deadline ${dlPast?'red':''}">${dlPast?'⚠':'📅'} Deadline: W${b.deadline}</span>`:''}
+          </div>
+        </div>
+        <div class="bes-actions">
+          ${['open','behandeling','besloten'].map(s=>`<button class="stbtn st-${s} ${b.status===s?'on':''}" onclick="quickBesStatus('${b.id}','${s}')">${s==='behandeling'?'Behandeling':s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join('')}
+          <button class="ibtn" onclick="openBesModal('${b.id}')">✏️</button>
+        </div>
+      </div>
+      ${b.note?`<div class="bes-note">${esc(b.note)}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function quickBesStatus(id,status){
+  const b=S.beslissingen.find(x=>x.id===id);if(!b)return;
+  b.status=status;save();render();toast('Status bijgewerkt');
+}
+
+function openBesModal(id){
+  // Fill fase dropdown
+  const sel=document.getElementById('bes-blok-fase');
+  sel.innerHTML=`<option value="">— geen koppeling —</option>`+
+    S.fases.map(f=>`<option value="${f.id}">${esc(f.naam)}</option>`).join('');
+
+  if(id){
+    const b=S.beslissingen.find(x=>x.id===id);if(!b)return;
+    document.getElementById('m-bes-title').textContent='Beslissing bewerken';
+    document.getElementById('bes-id').value=b.id;
+    document.getElementById('bes-desc').value=b.desc;
+    sel.value=b.faseId||'';
+    document.getElementById('bes-deadline').value=b.deadline||'';
+    document.getElementById('bes-status').value=b.status;
+    document.getElementById('bes-note').value=b.note||'';
+    document.getElementById('bes-del-btn').style.display='inline-flex';
+  } else {
+    document.getElementById('m-bes-title').textContent='Beslissing toevoegen';
+    ['bes-id','bes-desc','bes-deadline','bes-note'].forEach(x=>document.getElementById(x).value='');
+    sel.value='';
+    document.getElementById('bes-status').value='open';
+    document.getElementById('bes-del-btn').style.display='none';
+  }
+  openModal('m-bes');
+}
+function saveBes(){
+  const id=document.getElementById('bes-id').value;
+  const desc=document.getElementById('bes-desc').value.trim();
+  if(!desc){alert('Geef een omschrijving op');return}
+  const data={desc,faseId:document.getElementById('bes-blok-fase').value||null,
+    deadline:parseInt(document.getElementById('bes-deadline').value)||null,
+    status:document.getElementById('bes-status').value,
+    note:document.getElementById('bes-note').value.trim()};
+  if(id){const i=S.beslissingen.findIndex(x=>x.id===id);if(i>=0)Object.assign(S.beslissingen[i],data);}
+  else S.beslissingen.push({id:uid(),...data});
+  save();closeModal('m-bes');render();toast('Beslissing opgeslagen');
+}
+function deleteBes(){
+  const id=document.getElementById('bes-id').value;
+  if(!confirm('Beslissing verwijderen?'))return;
+  S.beslissingen=S.beslissingen.filter(b=>b.id!==id);
+  save();closeModal('m-bes');render();toast('Verwijderd');
+}
+
+// ──────────────────────────────────────────
+// SETTINGS & EXPORT
+// ──────────────────────────────────────────
+// ──────────────────────────────────────────
+// CONTACTEN
+// ──────────────────────────────────────────
+function buildContactDropdown(wrapId, selectedId){
+  const wrap=document.getElementById(wrapId);if(!wrap)return;
+  const list=S.contacten||[];
+  const opts=list.map(c=>`<option value="${c.id}"${selectedId===c.id?' selected':''}>${esc(c.naam)}${c.rol?' — '+esc(c.rol):''}</option>`).join('');
+  wrap.innerHTML=`
+    <select id="${wrapId}-sel" onchange="onContactSelect('${wrapId}')">
+      <option value="">— Niemand —</option>
+      ${opts}
+      <option value="__new__">＋ Nieuw contact toevoegen</option>
+    </select>
+    <div id="${wrapId}-new" style="display:none;margin-top:8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--mut);margin-bottom:8px">Nieuw contact</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input type="text" id="${wrapId}-nn" placeholder="Naam *" style="flex:1;min-width:100px;font-size:13px">
+        <input type="text" id="${wrapId}-nr" placeholder="Rol / bedrijf (optioneel)" style="flex:1.5;min-width:130px;font-size:13px">
+        <button class="btn btn-p btn-sm" onclick="quickAddContact('${wrapId}')" style="flex-shrink:0">Toevoegen</button>
+      </div>
+    </div>`;
+}
+
+function onContactSelect(wrapId){
+  const val=document.getElementById(wrapId+'-sel').value;
+  document.getElementById(wrapId+'-new').style.display=val==='__new__'?'block':'none';
+}
+
+function quickAddContact(wrapId){
+  const naam=document.getElementById(wrapId+'-nn').value.trim();
+  if(!naam){alert('Geef een naam op');return;}
+  const rol=document.getElementById(wrapId+'-nr').value.trim();
+  if(!S.contacten)S.contacten=[];
+  const nc={id:uid(),naam,rol};
+  S.contacten.push(nc);
+  save();
+  buildContactDropdown(wrapId,nc.id);
+  renderContactenLijst();
+  toast(naam+' toegevoegd');
+}
+
+function addContact(){
+  const naam=document.getElementById('new-ct-naam').value.trim();
+  if(!naam){alert('Geef een naam op');return;}
+  const rol=document.getElementById('new-ct-rol').value.trim();
+  if(!S.contacten)S.contacten=[];
+  S.contacten.push({id:uid(),naam,rol});
+  save();
+  document.getElementById('new-ct-naam').value='';
+  document.getElementById('new-ct-rol').value='';
+  renderContactenLijst();
+  toast(naam+' toegevoegd');
+}
+
+function removeContact(id){
+  if(!confirm('Contact verwijderen?'))return;
+  S.contacten=(S.contacten||[]).filter(c=>c.id!==id);
+  save();renderContactenLijst();toast('Contact verwijderd');
+}
+
+function renderContactenLijst(){
+  const el=document.getElementById('contacten-lijst');
+  const cnt=document.getElementById('contact-count');
+  if(!el)return;
+  const list=S.contacten||[];
+  if(cnt)cnt.textContent=list.length+' contacten';
+  if(!list.length){el.innerHTML='<div class="sl" style="padding:8px 0">Nog geen contacten</div>';return;}
+  el.innerHTML=list.map(c=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surf2);border-radius:6px;margin-bottom:5px">
+      <div style="flex:1">
+        <span style="font-size:13px;font-weight:600">${esc(c.naam)}</span>
+        ${c.rol?`<span style="font-size:12px;color:var(--mut)"> — ${esc(c.rol)}</span>`:''}
+      </div>
+      <button class="ibtn" onclick="removeContact('${c.id}')" style="font-size:13px;color:var(--red);min-height:32px;min-width:32px">✕</button>
+    </div>`).join('');
+}
+
+function contactNaam(respId){
+  if(!respId)return'';
+  const c=(S.contacten||[]).find(x=>x.id===respId);
+  return c?c.naam:'';
+}
+
+// ──────────────────────────────────────────
+function openModalNaam(){
+  document.getElementById('proj-naam').value=S.settings.naam||'';
+  document.getElementById('proj-jaar').value=S.settings.jaar||2025;
+  document.getElementById('proj-budget').value=S.settings.budget||0;
+  openModal('m-naam');
+  renderContactenLijst();
+}
+function saveNaam(){
+  S.settings.naam=document.getElementById('proj-naam').value.trim()||'Mijn Renovatie';
+  S.settings.jaar=parseInt(document.getElementById('proj-jaar').value)||2026;
+  S.settings.budget=parseFloat(document.getElementById('proj-budget').value)||0;
+  save();closeModal('m-naam');render();toast('Instellingen opgeslagen');
+}
+
+function resetAlleenKosten(){
+  if(!confirm('Alleen de kostenposten vervangen door de projectbedragen uit het Excel?\n\nRuimtes, planning en beslissingen blijven ongewijzigd.'))return;
+  S.kosten=JSON.parse(JSON.stringify(SAMPLE.kosten));
+  try{localStorage.setItem('renov_v2',JSON.stringify(S))}catch(e){}
+  if(FB_READY&&fbRef){
+    setSyncStatus('saving');
+    fbRef.set(S)
+      .then(()=>{setSyncStatus('saved');toast('Kosten bijgewerkt naar projectbedragen ✓ (totaal €423.653)');})
+      .catch(()=>{setSyncStatus('error');toast('Kosten lokaal bijgewerkt, sync mislukt');});
+  } else {
+    toast('Kosten bijgewerkt naar projectbedragen (lokaal)');
+  }
+  closeModal('m-naam');render();
+}
+
+function resetNaarProjectdata(){
+  if(!confirm('Alle huidige data vervangen door de ingebouwde projectdata?\n\nDit overschrijft ook de data in Firebase en kan niet ongedaan worden gemaakt.'))return;
+  S=JSON.parse(JSON.stringify(SAMPLE));
+  S.ganttOffset=Math.max(0,currentWeek()-6);
+  // Forceer directe write naar Firebase (omzeilt debounce)
+  try{localStorage.setItem('renov_v2',JSON.stringify(S))}catch(e){}
+  if(FB_READY&&fbRef){
+    setSyncStatus('saving');
+    fbRef.set(S)
+      .then(()=>{setSyncStatus('saved');toast('Projectdata geladen en gesynchroniseerd ✓');})
+      .catch(()=>{setSyncStatus('error');toast('Data lokaal geladen, sync mislukt');});
+  } else {
+    toast('Projectdata geladen (lokaal)');
+  }
+  closeModal('m-naam');render();
+}
+function exportApp(){
+  const blob=new Blob([document.documentElement.outerHTML],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='renovatie-planner.html';
+  a.click();toast('Bestand opgeslagen');
+}
+
+// ──────────────────────────────────────────
+// PLATTEGRONDEN
+// ──────────────────────────────────────────
+const PLATTEGRONDEN = [
+  { id:'bg',   label:'Begane grond',    file:'beganegrond-print-web.svg' },
+  { id:'verd', label:'1e verdieping',   file:'eerste-verdieping-print-web.svg' },
+];
+const _svgLoaded = {};
+
+function renderPlattegronden() {
+  let h = `<div class="shd"><h2>Plattegronden</h2>
+    <span class="sl">Scroll of pinch om in te zoomen · Klik en sleep om te bewegen</span>
+  </div>`;
+
+  PLATTEGRONDEN.forEach(p => {
+    h += `<div class="card mb16">
+      <div class="fb mb12">
+        <div>
+          <div class="ctitle">${p.label}</div>
+          <div class="sl">${p.file}</div>
+        </div>
+        <div class="fca g8">
+          <button class="btn btn-ghost btn-sm" onclick="resetZoom('${p.id}')" id="btn-reset-${p.id}" style="display:none">↺ Reset zoom</button>
+          <button class="btn btn-p btn-sm" onclick="loadSVG('${p.id}')" id="btn-load-${p.id}">Laad plattegrond</button>
+        </div>
+      </div>
+      <div id="viewer-${p.id}">
+        <div class="svg-load-placeholder">
+          <div class="pl-icon">🗺</div>
+          <p>Klik op "Laad plattegrond" om de tekening te openen.<br>
+          <span style="font-size:11px;color:var(--mut2)">Bestand: ${p.file} — laadt alleen bij eerste klik</span></p>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('tab-plattegronden').innerHTML = h;
+}
+
+async function loadSVG(id) {
+  const p = PLATTEGRONDEN.find(x => x.id === id);
+  if (!p) return;
+
+  const btn = document.getElementById('btn-load-' + id);
+  btn.textContent = 'Laden…'; btn.disabled = true;
+
+  try {
+    // Fetch the SVG file (relative path — works on Netlify)
+    const resp = await fetch(p.file);
+    if (!resp.ok) throw new Error('Bestand niet gevonden: ' + p.file);
+    const svgText = await resp.text();
+
+    const container = document.getElementById('viewer-' + id);
+    container.innerHTML = `
+      <div class="svg-viewer" id="svgwrap-${id}">
+        <div class="svg-inner" id="svginner-${id}">${svgText}</div>
+        <div class="svg-controls">
+          <button onclick="zoomSVG('${id}',1.5)" title="Inzoomen">＋</button>
+          <button onclick="zoomSVG('${id}',0.67)" title="Uitzoomen">－</button>
+          <button onclick="fitSVG('${id}')" title="Passend">⊡</button>
+          <button onclick="resetZoom('${id}')" title="100%">1:1</button>
+        </div>
+        <div style="position:absolute;bottom:12px;left:12px;font-size:11px;color:rgba(255,255,255,.6);background:rgba(0,0,0,.4);padding:4px 8px;border-radius:6px;pointer-events:none">
+          Scroll of pinch om in te zoomen · Klik ⊡ voor overzicht
+        </div>
+      </div>`;
+
+    // Bewaar de SVG's originele pixel-dimensies voor fit-berekening
+    const svgEl = container.querySelector('svg');
+    let svgNatW = 800, svgNatH = 600;
+    if (svgEl) {
+      svgNatW = parseFloat(svgEl.getAttribute('width'))  || 800;
+      svgNatH = parseFloat(svgEl.getAttribute('height')) || 600;
+      // Verwijder de CSS overrides — laat pixel-dimensies hun werk doen
+      svgEl.style.display = 'block';
+    }
+
+    document.getElementById('btn-reset-' + id).style.display = 'inline-flex';
+    btn.style.display = 'none';
+
+    initPanZoom(id, svgNatW, svgNatH);
+    _svgLoaded[id] = true;
+
+    // Automatisch fit na korte delay (laat browser renderen)
+    setTimeout(() => fitSVG(id), 80);
+
+  } catch (e) {
+    const container = document.getElementById('viewer-' + id);
+    container.innerHTML = `<div class="svg-load-placeholder">
+      <div class="pl-icon">⚠️</div>
+      <p><strong>Kan bestand niet laden.</strong><br>
+      Zorg dat <code>${p.file}</code> in dezelfde map staat als de HTML.<br>
+      <span style="font-size:11px">Bij Netlify: sleep beide SVG-bestanden mee tijdens de upload.</span></p>
+    </div>`;
+    btn.textContent = 'Opnieuw proberen'; btn.disabled = false;
+  }
+}
+
+// ── Pan & zoom engine ─────────────────────
+const _vzState = {};
+
+function fitSVG(id) {
+  const st = _vzState[id]; if (!st) return;
+  const wrap = document.getElementById('svgwrap-' + id);
+  const inner = document.getElementById('svginner-' + id);
+  if (!wrap || !inner) return;
+  const wW = wrap.clientWidth, wH = wrap.clientHeight;
+  const sW = st.natW || inner.scrollWidth || 800;
+  const sH = st.natH || inner.scrollHeight || 600;
+  const scale = Math.min(wW / sW, wH / sH) * 0.95;
+  const x = (wW - sW * scale) / 2;
+  const y = (wH - sH * scale) / 2;
+  st.scale = scale; st.x = x; st.y = y;
+  inner.style.transform = `translate(${x}px,${y}px) scale(${scale})`;
+}
+
+function initPanZoom(id, natW, natH) {
+  const wrap  = document.getElementById('svgwrap-' + id);
+  const inner = document.getElementById('svginner-' + id);
+  const st = _vzState[id] = { scale:1, x:0, y:0, dragging:false, sx:0, sy:0, pinchDist:0, pinchScale:1, natW:natW||800, natH:natH||600 };
+
+  function apply() {
+    inner.style.transform = `translate(${st.x}px,${st.y}px) scale(${st.scale})`;
+  }
+
+  // Mouse wheel zoom (centered on cursor)
+  wrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = wrap.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const delta = e.deltaY < 0 ? 1.12 : 0.89;
+    const newScale = Math.max(0.2, Math.min(8, st.scale * delta));
+    st.x = cx - (cx - st.x) * (newScale / st.scale);
+    st.y = cy - (cy - st.y) * (newScale / st.scale);
+    st.scale = newScale;
+    apply();
+  }, { passive: false });
+
+  // Mouse drag
+  wrap.addEventListener('mousedown', e => { st.dragging = true; st.sx = e.clientX - st.x; st.sy = e.clientY - st.y; });
+  window.addEventListener('mousemove', e => { if (!st.dragging) return; st.x = e.clientX - st.sx; st.y = e.clientY - st.sy; apply(); });
+  window.addEventListener('mouseup',   () => st.dragging = false);
+
+  // Touch: drag + pinch zoom
+  wrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      st.pinchDist  = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      st.pinchScale = st.scale;
+    } else {
+      st.dragging = true;
+      st.sx = e.touches[0].clientX - st.x;
+      st.sy = e.touches[0].clientY - st.y;
+    }
+  }, { passive: true });
+
+  wrap.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      st.scale = Math.max(0.2, Math.min(8, st.pinchScale * (dist / st.pinchDist)));
+      apply();
+    } else if (st.dragging) {
+      st.x = e.touches[0].clientX - st.sx;
+      st.y = e.touches[0].clientY - st.sy;
+      apply();
+    }
+  }, { passive: false });
+
+  wrap.addEventListener('touchend', () => st.dragging = false);
+}
+
+function zoomSVG(id, factor) {
+  const st = _vzState[id]; if (!st) return;
+  const wrap = document.getElementById('svgwrap-' + id);
+  const cx = wrap.clientWidth / 2, cy = wrap.clientHeight / 2;
+  const newScale = Math.max(0.2, Math.min(8, st.scale * factor));
+  st.x = cx - (cx - st.x) * (newScale / st.scale);
+  st.y = cy - (cy - st.y) * (newScale / st.scale);
+  st.scale = newScale;
+  document.getElementById('svginner-' + id).style.transform =
+    `translate(${st.x}px,${st.y}px) scale(${st.scale})`;
+}
+
+function resetZoom(id) {
+  // Reset = terug naar 1:1 (ongeschaald, linkerbovenhoek)
+  const st = _vzState[id]; if (!st) return;
+  st.scale = 1; st.x = 0; st.y = 0;
+  document.getElementById('svginner-' + id).style.transform = 'translate(0,0) scale(1)';
+}
+
+// ──────────────────────────────────────────
+// SEARCH
+// ──────────────────────────────────────────
+function toggleSearch(){
+  const bar=document.getElementById('search-bar');
+  const inp=document.getElementById('search-input');
+  const visible=bar.style.display!=='none'&&bar.style.display!=='';
+  if(visible){bar.style.display='none';document.getElementById('search-results').style.display='none';}
+  else{bar.style.display='block';setTimeout(()=>inp.focus(),80);}
+}
+
+function doSearch(q){
+  const res=document.getElementById('search-results');
+  q=q.trim().toLowerCase();
+  if(q.length<2){res.style.display='none';return;}
+  const results=[];
+
+  // Items
+  S.ruimtes.forEach(r=>{
+    r.items.filter(i=>i.naam.toLowerCase().includes(q)||(i.notitie||'').toLowerCase().includes(q)||(i.mat||'').toLowerCase().includes(q))
+      .forEach(i=>results.push({type:'taak',icon:'✅',title:i.naam,sub:r.naam+(i.done?' · Afgerond':''),action:`showTab('ruimtes');setTimeout(()=>{const el=document.getElementById('rbody-${r.id}');if(el){const r=S.ruimtes.find(x=>x.id==='${r.id}');if(r)r.open=true;save();renderRuimtes();}},100)`}));
+  });
+  // Ruimtes
+  S.ruimtes.filter(r=>r.naam.toLowerCase().includes(q)).forEach(r=>
+    results.push({type:'ruimte',icon:'🏠',title:r.naam,sub:`${r.items.length} taken`,action:`showTab('ruimtes')`}));
+  // Kosten
+  S.kosten.filter(k=>k.naam.toLowerCase().includes(q)).forEach(k=>
+    results.push({type:'kost',icon:'💰',title:k.naam,sub:fmt(k.bedrag)+' · '+k.type,action:`showTab('budget')`}));
+  // Beslissingen
+  S.beslissingen.filter(b=>b.desc.toLowerCase().includes(q)||(b.note||'').toLowerCase().includes(q)).forEach(b=>
+    results.push({type:'beslissing',icon:'❓',title:b.desc.substring(0,60)+(b.desc.length>60?'…':''),sub:'Beslissing · '+b.status,action:`showTab('beslissingen')`}));
+  // Fases
+  S.fases.filter(f=>f.naam.toLowerCase().includes(q)).forEach(f=>
+    results.push({type:'fase',icon:'📅',title:f.naam,sub:`W${f.sw}–W${f.ew} · ${f.status}`,action:`showTab('planning')`}));
+  // Contacten
+  S.contacten&&S.contacten.filter(c=>c.naam.toLowerCase().includes(q)).forEach(c=>
+    results.push({type:'contact',icon:'👤',title:c.naam,sub:c.rol||'Contact',action:`openModalNaam()`}));
+
+  if(!results.length){
+    res.innerHTML=`<div class="sr-empty">Geen resultaten voor "${esc(q)}"</div>`;
+    res.style.display='block';return;
+  }
+  // Group by type
+  const groups={taak:'Taken',ruimte:'Ruimtes',kost:'Budget',beslissing:'Beslissingen',fase:'Planning',contact:'Contacten'};
+  let html='';
+  Object.keys(groups).forEach(type=>{
+    const grp=results.filter(x=>x.type===type);
+    if(!grp.length)return;
+    html+=`<div class="sr-group"><div class="sr-label">${groups[type]}</div>`;
+    grp.slice(0,5).forEach(r=>{
+      html+=`<div class="sr-item" onclick="${r.action};toggleSearch()">
+        <span style="font-size:18px">${r.icon}</span>
+        <div style="flex:1;min-width:0"><div class="sri-title">${esc(r.title)}</div><div class="sri-sub">${esc(r.sub)}</div></div>
+      </div>`;
+    });
+    if(grp.length>5)html+=`<div class="sl" style="padding:4px 14px 8px">+ ${grp.length-5} meer</div>`;
+    html+=`</div>`;
+  });
+  res.innerHTML=html;
+  res.style.display='block';
+}
+
+// ──────────────────────────────────────────
+// BULK ACTIONS
+// ──────────────────────────────────────────
+let _bulkMode=false;
+const _bulkSel=new Set(); // "rid:iid"
+
+function toggleBulkMode(){
+  _bulkMode=!_bulkMode;
+  if(!_bulkMode){_bulkSel.clear();updateBulkBar();}
+  renderRuimtes();
+}
+
+function toggleBulkItem(rid,iid,checked){
+  const key=rid+':'+iid;
+  checked?_bulkSel.add(key):_bulkSel.delete(key);
+  updateBulkBar();
+  // Update visual
+  const el=document.getElementById('ci-'+iid);
+  if(el)el.classList.toggle('bulk-selected',checked);
+}
+
+function updateBulkBar(){
+  const bar=document.getElementById('bulk-bar');
+  const cnt=document.getElementById('bulk-count');
+  if(_bulkSel.size===0){bar.classList.remove('show');return;}
+  cnt.textContent=_bulkSel.size+' geselecteerd';
+  bar.classList.add('show');
+}
+
+function clearBulk(){_bulkMode=false;_bulkSel.clear();updateBulkBar();renderRuimtes();}
+
+function bulkAssign(){
+  if(!_bulkSel.size)return;
+  const sel=prompt('Voer contactnaam in om toe te wijzen:\n'+
+    (S.contacten||[]).map((c,i)=>`${i+1}. ${c.naam}`).join('\n'));
+  if(!sel)return;
+  const nr=parseInt(sel)-1;
+  const ct=S.contacten&&(isNaN(nr)?S.contacten.find(c=>c.naam.toLowerCase()===sel.toLowerCase()):S.contacten[nr]);
+  if(!ct){toast('Contact niet gevonden');return;}
+  _bulkSel.forEach(key=>{
+    const [rid,iid]=key.split(':');
+    const r=S.ruimtes.find(x=>x.id===rid);
+    const i=r&&r.items.find(x=>x.id===iid);
+    if(i)i.respId=ct.id;
+  });
+  save();clearBulk();toast(`Toegewezen aan ${ct.naam}`);
+}
+
+function bulkMove(){
+  if(!_bulkSel.size)return;
+  const opts=S.ruimtes.map((r,i)=>`${i+1}. ${r.naam}`).join('\n');
+  const sel=prompt('Verplaatsen naar welke ruimte?\n'+opts);
+  if(!sel)return;
+  const nr=parseInt(sel)-1;
+  const target=isNaN(nr)?S.ruimtes.find(r=>r.naam.toLowerCase()===sel.toLowerCase()):S.ruimtes[nr];
+  if(!target){toast('Ruimte niet gevonden');return;}
+  _bulkSel.forEach(key=>{
+    const [rid,iid]=key.split(':');
+    if(rid===target.id)return;
+    const src=S.ruimtes.find(x=>x.id===rid);
+    const i=src&&src.items.find(x=>x.id===iid);
+    if(!i)return;
+    src.items=src.items.filter(x=>x.id!==iid);
+    target.items.push(i);
+  });
+  save();clearBulk();toast(`Verplaatst naar ${target.naam}`);
+}
+
+function bulkDelete(){
+  if(!_bulkSel.size||!confirm(`${_bulkSel.size} taken verwijderen?`))return;
+  _bulkSel.forEach(key=>{
+    const [rid,iid]=key.split(':');
+    const r=S.ruimtes.find(x=>x.id===rid);
+    if(r)r.items=r.items.filter(x=>x.id!==iid);
+  });
+  save();clearBulk();toast('Taken verwijderd');
+}
+
+// ──────────────────────────────────────────
+// INIT
+// ──────────────────────────────────────────
+load();
+if(!S.ganttOffset&&S.ganttOffset!==0)S.ganttOffset=Math.max(0,currentWeek()-6);
+renderConfigBanner();
+render();
+</script>
+</body>
+</html>
