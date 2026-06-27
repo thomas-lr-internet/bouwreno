@@ -313,6 +313,14 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 .cf-row .cf-sub{font-size:11px;color:var(--mut)}
 .cf-row .cf-amt{font-weight:700;white-space:nowrap}
 
+/* ── Financiering cumulatief saldo ─────────── */
+.fin-saldo{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;padding:10px 0 0;border-top:1px solid var(--border)}
+.fin-saldo-cell{text-align:center;background:var(--surf2);border-radius:6px;padding:7px 8px}
+.fin-saldo-val{font-size:13px;font-weight:700;line-height:1.2}
+.fin-saldo-lbl{font-size:10px;color:var(--mut);text-transform:uppercase;letter-spacing:.3px;margin-top:2px}
+.fin-ong-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.06);flex-wrap:wrap}
+.fin-ong-row:last-child{border-bottom:none}
+
 /* ── Financieringsbronnen ─────────────────── */
 .fin-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
 .fin-row:last-child{border-bottom:none}
@@ -323,6 +331,7 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 .fin-type-overwaarde{background:var(--grn-lt);color:var(--grn)}
 .fin-type-eigen{background:var(--acc-lt);color:var(--acc-dk)}
 .fin-type-anders{background:var(--surf2);color:var(--mut)}
+.fin-type-subsidie{background:#ede9fe;color:#7c3aed}
 .fin-bedrag{font-size:15px;font-weight:700}
 .fin-bar{height:4px;background:rgba(0,0,0,.08);border-radius:2px;margin-top:5px;overflow:hidden}
 .fin-bar-fill{height:100%;border-radius:2px;transition:width .4s}
@@ -645,6 +654,14 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
     </select>
   </div>
 
+  <div class="ff" id="kost-ontvangen-ff" style="display:none">
+    <label style="margin-bottom:0"> </label>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;font-size:13px">
+      <input type="checkbox" id="kost-ontvangen" style="width:16px;height:16px;accent-color:#7c3aed">
+      Subsidie ontvangen (gestort op rekening)
+    </label>
+  </div>
+
   <div id="kost-ruimte-ff">
     <div class="ff">
       <label>Ruimtes</label>
@@ -766,6 +783,7 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
         <option value="depot">Bouwdepot</option>
         <option value="overwaarde">Overwaarde</option>
         <option value="eigen">Eigen geld</option>
+        <option value="subsidie">Subsidie</option>
         <option value="anders">Anders</option>
       </select>
     </div>
@@ -1881,8 +1899,8 @@ function deleteDoc(rid,did){
 // ──────────────────────────────────────────
 // BUDGET
 // ──────────────────────────────────────────
-const FINKLEUREN = { depot:'#2563eb', overwaarde:'#059669', eigen:'#d97706', anders:'#64748b' };
-const FINLABELS  = { depot:'Bouwdepot', overwaarde:'Overwaarde', eigen:'Eigen geld', anders:'Anders' };
+const FINKLEUREN = { depot:'#2563eb', overwaarde:'#059669', eigen:'#d97706', anders:'#64748b', subsidie:'#7c3aed' };
+const FINLABELS  = { depot:'Bouwdepot', overwaarde:'Overwaarde', eigen:'Eigen geld', anders:'Anders', subsidie:'Subsidie' };
 
 function openFinancieringModal(id) {
   if(!S.settings.financiering)S.settings.financiering=[];
@@ -1928,6 +1946,22 @@ function deleteFinanciering(id) {
   if(!confirm('Financieringsbron verwijderen?'))return;
   S.settings.financiering=S.settings.financiering.filter(x=>x.id!==id);
   save();render();toast('Verwijderd');
+}
+
+function quickAssignKost(kostId, finId) {
+  const k=S.kosten.find(x=>x.id===kostId);
+  if(!k)return;
+  k.finId=finId;
+  save();render();toast(finId?'Toegewezen':'Ontkoppeld');
+}
+
+function quickAssignTermijn(kostId, termijnId, finId) {
+  const k=S.kosten.find(x=>x.id===kostId);
+  if(!k||!k.termijnen)return;
+  const t=k.termijnen.find(x=>x.id===termijnId);
+  if(!t)return;
+  t.finId=finId;
+  save();render();toast(finId?'Toegewezen':'Ontkoppeld');
 }
 
 function renderBudget(){
@@ -2074,25 +2108,87 @@ function renderBudget(){
   // ── Financieringsbronnen ─────────────────
   const fin=arr(S.settings.financiering);
   const finTotaal=fin.reduce((s,f)=>s+Number(f.bedrag||0),0);
-  const finVerschil=finTotaal-eindtotaal;
+  // Optie A: vergelijk totaal bronnen vs bruto kosten (subsidies zitten als bron mee)
+  const grossKosten=eindtotaal+subsidieTotal;
+  const finVerschil=finTotaal-grossKosten;
   const finOk=finVerschil>=0;
-  // Ongekoppelde kosten (excl. subsidies — die hoeven geen bron te hebben)
-  const ongekoppeld=kosten.filter(k=>!k.finId);
-  const ongekoppeldAmt=ongekoppeld.reduce((s,k)=>s+Number(k.bedrag||0),0);
+  // Alle termijnen flat (voor per-bron berekeningen)
+  const allTermijnenFlat=[];
+  S.kosten.forEach(k=>{if(k.termijnen&&k.termijnen.length)k.termijnen.forEach(t=>allTermijnenFlat.push({...t,kostId:k.id,kostNaam:k.naam,kostFinId:k.finId}));});
+  // Ongekoppeld: reguliere kosten zonder finId + termijnen zonder finId + subsidieposten zonder finId
+  const ongKosten=kosten.filter(k=>!k.finId&&(!k.termijnen||!k.termijnen.length));
+  const ongTermijnen=allTermijnenFlat.filter(t=>!t.finId);
+  const ongSubsidies=subsidieItems.filter(k=>!k.finId);
+  const ongKostenAmt=ongKosten.reduce((s,k)=>s+Number(k.bedrag||0),0);
+  const ongTermijnenAmt=ongTermijnen.reduce((s,t)=>s+Number(t.bedrag||0),0);
+  const ongSubsidiesAmt=ongSubsidies.reduce((s,k)=>s+Number(k.bedrag||0),0);
+  const ongTotaalAmt=ongKostenAmt+ongTermijnenAmt+ongSubsidiesAmt;
+  // Aparte dropdown-opties per type (voorkomt verkeerde koppeling)
+  const finRegOptHtml='<option value="">— Kies bron —</option>'+fin.filter(f=>f.type!=='subsidie').map(f=>`<option value="${f.id}">${esc(f.naam)}</option>`).join('');
+  const finSubOptHtml='<option value="">— Kies bron —</option>'+fin.filter(f=>f.type==='subsidie').map(f=>`<option value="${f.id}">${esc(f.naam)}</option>`).join('');
   h+=`<div class="card mb16">
     <div class="fb mb12">
       <div>
         <div class="ctitle">Financieringsbronnen</div>
-        ${fin.length?`<div class="sl">${fin.length} bron${fin.length===1?'':'nen'} · ${fmt(finTotaal)} beschikbaar</div>`:'<div class="sl">Splits uw budget in bouwdepot, overwaarde en eigen geld</div>'}
+        ${fin.length?`<div class="sl">${fin.length} bron${fin.length===1?'':'nen'} · ${fmt(finTotaal)} beschikbaar</div>`:'<div class="sl">Splits uw budget in bouwdepot, overwaarde, eigen geld en subsidies</div>'}
       </div>
       <button class="btn btn-p btn-sm" onclick="openFinancieringModal()">+ Toevoegen</button>
     </div>
     ${fin.length?fin.map(f=>{
       const kleur=FINKLEUREN[f.type||'anders'];
-      const toegewezen=kosten.filter(k=>k.finId===f.id).reduce((s,k)=>s+Number(k.bedrag||0),0);
-      const bezPct=Number(f.bedrag)?Math.min(100,Math.round(toegewezen/Number(f.bedrag)*100)):0;
-      const isVol=toegewezen>Number(f.bedrag||0)&&Number(f.bedrag||0)>0;
-      const vrij=Number(f.bedrag||0)-toegewezen;
+      const bedrag=Number(f.bedrag||0);
+      const isSubBron=f.type==='subsidie';
+      if(isSubBron){
+        // Subsidie bron: gekoppelde subsidie-kostenposten tellen als ontvangen/bevestigd
+        const gekoppeld=subsidieItems.filter(k=>k.finId===f.id);
+        const bevestigd=gekoppeld.reduce((s,k)=>s+Number(k.bedrag||0),0);
+        const ontvangen=gekoppeld.filter(k=>k.ontvangen).reduce((s,k)=>s+Number(k.bedrag||0),0);
+        const nogTeOntvangen=bedrag-bevestigd;
+        const bezPct=bedrag?Math.min(100,Math.round(bevestigd/bedrag*100)):0;
+        const saldoOk=nogTeOntvangen>=0;
+        return`<div class="fin-row">
+          <div class="fin-kleur" style="background:${kleur}"></div>
+          <div style="flex:1;min-width:0">
+            <div class="fca g8">
+              <span class="fin-naam">${esc(f.naam)}</span>
+              <span class="fin-type fin-type-subsidie">Subsidie</span>
+              ${f.note?`<span class="sl" style="font-size:11px">${esc(f.note)}</span>`:''}
+            </div>
+            <div class="fin-bar mt4"><div class="fin-bar-fill" style="width:${bezPct}%;background:${kleur}"></div></div>
+            <div class="fin-saldo">
+              <div class="fin-saldo-cell">
+                <div class="fin-saldo-val">${fmt(bevestigd)}</div>
+                <div class="fin-saldo-lbl">Bevestigd</div>
+              </div>
+              <div class="fin-saldo-cell">
+                <div class="fin-saldo-val" style="color:var(--grn)">${fmt(ontvangen)}</div>
+                <div class="fin-saldo-lbl">Ontvangen</div>
+              </div>
+              <div class="fin-saldo-cell">
+                <div class="fin-saldo-val" style="color:${saldoOk?'var(--mut)':'var(--red)'}">${saldoOk?fmt(nogTeOntvangen):'−'+fmt(-nogTeOntvangen)}</div>
+                <div class="fin-saldo-lbl">${saldoOk?'Nog te ontvangen':'Boven aanvraag'}</div>
+              </div>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;min-width:80px;padding-left:8px">
+            <div class="fin-bedrag">${fmt(bedrag)}</div>
+            <div class="sl">aangevraagd</div>
+            <div class="fca g4 mt8" style="justify-content:flex-end">
+              <button class="ibtn" style="font-size:12px" onclick="openFinancieringModal('${f.id}')">✏️</button>
+              <button class="ibtn" style="font-size:12px" onclick="deleteFinanciering('${f.id}')">🗑</button>
+            </div>
+          </div>
+        </div>`;
+      }
+      // Reguliere bron
+      const gresKosten=kosten.filter(k=>k.finId===f.id&&(!k.termijnen||!k.termijnen.length)).reduce((s,k)=>s+Number(k.bedrag||0),0);
+      const gresTermijnen=allTermijnenFlat.filter(t=>t.finId===f.id);
+      const gresTermijnenAmt=gresTermijnen.reduce((s,t)=>s+Number(t.bedrag||0),0);
+      const betaaldBron=gresTermijnen.filter(t=>t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0);
+      const gereserveerd=gresKosten+gresTermijnenAmt;
+      const saldo=bedrag-gereserveerd;
+      const saldoOk=saldo>=0;
+      const bezPct=bedrag?Math.min(100,Math.round(gereserveerd/bedrag*100)):0;
       return`<div class="fin-row">
         <div class="fin-kleur" style="background:${kleur}"></div>
         <div style="flex:1;min-width:0">
@@ -2101,32 +2197,59 @@ function renderBudget(){
             <span class="fin-type fin-type-${f.type||'anders'}">${FINLABELS[f.type||'anders']}</span>
             ${f.note?`<span class="sl" style="font-size:11px">${esc(f.note)}</span>`:''}
           </div>
-          <div class="fin-bar mt4"><div class="fin-bar-fill" style="width:${bezPct}%;background:${isVol?'var(--red)':kleur}"></div></div>
-          <div style="font-size:11px;color:var(--mut);margin-top:3px">
-            ${toegewezen>0?`${fmt(toegewezen)} toegewezen`:'Nog niets toegewezen'}
-            ${Number(f.bedrag)>0?(isVol?` · <span style="color:var(--red)">+${fmt(-vrij)} over capaciteit</span>`:` · <span style="color:var(--grn)">${fmt(vrij)} vrij</span>`):''}
+          <div class="fin-bar mt4"><div class="fin-bar-fill" style="width:${bezPct}%;background:${saldoOk?kleur:'var(--red)'}"></div></div>
+          <div class="fin-saldo">
+            <div class="fin-saldo-cell">
+              <div class="fin-saldo-val">${fmt(gereserveerd)}</div>
+              <div class="fin-saldo-lbl">Gereserveerd</div>
+            </div>
+            <div class="fin-saldo-cell">
+              <div class="fin-saldo-val" style="color:var(--grn)">${fmt(betaaldBron)}</div>
+              <div class="fin-saldo-lbl">Betaald</div>
+            </div>
+            <div class="fin-saldo-cell">
+              <div class="fin-saldo-val" style="color:${saldoOk?'var(--grn)':'var(--red)'}">${saldoOk?fmt(saldo):'−'+fmt(-saldo)}</div>
+              <div class="fin-saldo-lbl">${saldoOk?'Vrij saldo':'Tekort'}</div>
+            </div>
           </div>
         </div>
-        <div style="text-align:right;flex-shrink:0;min-width:80px">
-          <div class="fin-bedrag">${fmt(f.bedrag)}</div>
+        <div style="text-align:right;flex-shrink:0;min-width:80px;padding-left:8px">
+          <div class="fin-bedrag">${fmt(bedrag)}</div>
           <div class="sl">${bezPct}% bezet</div>
-        </div>
-        <div class="fca g4">
-          <button class="ibtn" style="font-size:12px" onclick="openFinancieringModal('${f.id}')">✏️</button>
-          <button class="ibtn" style="font-size:12px" onclick="deleteFinanciering('${f.id}')">🗑</button>
+          <div class="fca g4 mt8" style="justify-content:flex-end">
+            <button class="ibtn" style="font-size:12px" onclick="openFinancieringModal('${f.id}')">✏️</button>
+            <button class="ibtn" style="font-size:12px" onclick="deleteFinanciering('${f.id}')">🗑</button>
+          </div>
         </div>
       </div>`;
     }).join(''):`<div style="padding:12px 0"><span class="sl">Nog geen bronnen toegevoegd — klik "+ Toevoegen" om te beginnen.</span></div>`}
-    ${fin.length&&ongekoppeld.length?`
-    <div style="background:var(--acc-lt);border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-top:12px">
-      <div class="fb">
+    ${fin.length&&ongTotaalAmt>0?`
+    <div style="background:var(--acc-lt);border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-top:14px">
+      <div class="fb mb10">
         <span style="font-size:13px;font-weight:600;color:var(--acc-dk)">⚠ Nog niet toegewezen aan bron</span>
-        <span style="font-weight:700;color:var(--acc-dk)">${fmt(ongekoppeldAmt)} · ${ongekoppeld.length} post${ongekoppeld.length===1?'':'en'}</span>
+        <span style="font-weight:700;color:var(--acc-dk)">${fmt(ongTotaalAmt)}</span>
       </div>
-      <div style="font-size:11px;color:#92400e;margin-top:5px;line-height:1.6">${ongekoppeld.map(k=>`<span style="cursor:pointer;text-decoration:underline" onclick="openKostModal('${k.id}')">${esc(k.naam)}</span>`).join(' · ')}</div>
+      ${ongKosten.length?`<div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">Kostenposten (${ongKosten.length})</div>
+      ${ongKosten.map(k=>`<div class="fin-ong-row">
+        <span style="font-size:12px;flex:1">${esc(k.naam)}</span>
+        <span class="sl" style="flex-shrink:0">${fmt(k.bedrag)}</span>
+        <select style="font-size:12px;padding:3px 6px;border:1px solid #fde68a;border-radius:4px;background:#fffbeb;min-width:130px" onchange="quickAssignKost('${k.id}',this.value)">${finRegOptHtml}</select>
+      </div>`).join('')}`:''}
+      ${ongTermijnen.length?`<div style="font-size:11px;font-weight:700;color:#92400e;margin-top:${ongKosten.length?10:0}px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">Termijnen (${ongTermijnen.length})</div>
+      ${ongTermijnen.map(t=>`<div class="fin-ong-row">
+        <span style="font-size:12px;flex:1">${esc(t.omschrijving||t.kostNaam)} <span class="sl">— ${esc(t.kostNaam)}</span></span>
+        <span class="sl" style="flex-shrink:0">${fmt(t.bedrag)}</span>
+        <select style="font-size:12px;padding:3px 6px;border:1px solid #fde68a;border-radius:4px;background:#fffbeb;min-width:130px" onchange="quickAssignTermijn('${t.kostId}','${t.id}',this.value)">${finRegOptHtml}</select>
+      </div>`).join('')}`:''}
+      ${ongSubsidies.length?`<div style="font-size:11px;font-weight:700;color:#92400e;margin-top:${(ongKosten.length||ongTermijnen.length)?10:0}px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">Subsidies (${ongSubsidies.length})</div>
+      ${ongSubsidies.map(k=>`<div class="fin-ong-row">
+        <span style="font-size:12px;flex:1">${esc(k.naam)}</span>
+        <span class="sl" style="flex-shrink:0">${fmt(k.bedrag)}</span>
+        <select style="font-size:12px;padding:3px 6px;border:1px solid #fde68a;border-radius:4px;background:#fffbeb;min-width:130px" onchange="quickAssignKost('${k.id}',this.value)">${finSubOptHtml}</select>
+      </div>`).join('')}`:''}
     </div>`:''}
     ${fin.length?`<div class="fin-totaal mt12">
-      <span class="sl" style="font-size:12px">Totaal beschikbaar vs netto kosten</span>
+      <span class="sl" style="font-size:12px">Totaal bronnen vs bruto kosten</span>
       <span style="font-weight:700;font-size:14px;color:${finOk?'var(--grn)':'var(--red)'}">
         ${fmt(finTotaal)} ${finOk?'▸ +'+fmt(finVerschil)+' buffer':'▸ −'+fmt(-finVerschil)+' tekort'}
       </span>
@@ -2155,7 +2278,7 @@ function renderBudget(){
   const allTermijnen=[];
   S.kosten.forEach(k=>{
     if(k.termijnen&&k.termijnen.length){
-      k.termijnen.forEach(t=>allTermijnen.push({...t,kostNaam:k.naam,contactId:k.contactId}));
+      k.termijnen.forEach(t=>allTermijnen.push({...t,kostNaam:k.naam,contactId:k.contactId,_effectiveFinId:t.finId||k.finId||''}));
     }
   });
   if(allTermijnen.length){
@@ -2179,10 +2302,14 @@ function renderBudget(){
       h+=`<div class="cf-month"><div class="cf-month-hd">${maandLabel} — <strong>${fmt(maandTotaal)}</strong></div>`;
       items.forEach(t=>{
         const ct=t.contactId?(S.contacten||[]).find(c=>c.id===t.contactId):null;
+        const bronT=t._effectiveFinId?fin.find(f=>f.id===t._effectiveFinId):null;
         h+=`<div class="cf-row ${t.betaald?'cf-paid':''}">
           <div class="cf-info">
-            <div class="cf-name">${esc(t.omschrijving||t.kostNaam)}</div>
-            <div class="cf-sub">${esc(t.kostNaam)}${ct?` · ${esc(ct.naam)}`:''} ${t.betaald?'· ✓ Betaald':''}</div>
+            <div class="cf-name fca g6">
+              ${bronT?`<span style="width:8px;height:8px;border-radius:50%;background:${FINKLEUREN[bronT.type||'anders']};flex-shrink:0"></span>`:'<span style="width:8px;height:8px;border-radius:50%;background:var(--border2);flex-shrink:0" title="Geen bron"></span>'}
+              ${esc(t.omschrijving||t.kostNaam)}
+            </div>
+            <div class="cf-sub">${esc(t.kostNaam)}${ct?` · ${esc(ct.naam)}`:''} ${bronT?`· <span style="color:${FINKLEUREN[bronT.type||'anders']}">${esc(bronT.naam)}</span>`:'· <span style="color:var(--mut2)">geen bron</span>'} ${t.betaald?'· ✓ Betaald':''}</div>
           </div>
           <div class="cf-amt ${t.betaald?'grn':''}">${fmt(t.bedrag)}</div>
         </div>`;
@@ -2334,7 +2461,7 @@ function checkVerdelingTotal(){
 
 // ── Termijnen ─────────────────────────────
 function addTermijn(){
-  _termijnenTemp.push({id:uid(),datum:'',omschrijving:'',bedrag:0,betaald:false});
+  _termijnenTemp.push({id:uid(),datum:'',omschrijving:'',bedrag:0,betaald:false,finId:''});
   renderTermijnen();
 }
 function removeTermijn(tid){
@@ -2343,6 +2470,7 @@ function removeTermijn(tid){
 }
 function renderTermijnen(){
   const el=document.getElementById('kost-termijnen');if(!el)return;
+  const fins=arr(S.settings.financiering);
   if(!_termijnenTemp.length){
     el.innerHTML=`<div class="sl" style="padding:6px 0;color:var(--mut2);font-size:12px">Geen termijnen — gebruik dit voor facturen in tranches</div>`;
     return;
@@ -2350,9 +2478,13 @@ function renderTermijnen(){
   const total=_termijnenTemp.reduce((s,t)=>s+Number(t.bedrag)||0,0);
   el.innerHTML=_termijnenTemp.map((t,i)=>`
     <div class="termijn-row">
-      <input type="date" value="${t.datum||''}" style="flex:1;min-width:130px" oninput="_termijnenTemp[${i}].datum=this.value">
-      <input type="text" value="${esc(t.omschrijving||'')}" placeholder="Omschrijving (bijv. 1e termijn)" style="flex:2;min-width:120px" oninput="_termijnenTemp[${i}].omschrijving=this.value">
-      <input type="number" value="${t.bedrag||''}" placeholder="€" style="flex:0.8;min-width:80px" oninput="_termijnenTemp[${i}].bedrag=Number(this.value)||0;updateTermijnTotal()">
+      <input type="date" value="${t.datum||''}" style="flex:1;min-width:120px" oninput="_termijnenTemp[${i}].datum=this.value">
+      <input type="text" value="${esc(t.omschrijving||'')}" placeholder="Omschrijving (bijv. 1e termijn)" style="flex:2;min-width:110px" oninput="_termijnenTemp[${i}].omschrijving=this.value">
+      <input type="number" value="${t.bedrag||''}" placeholder="€" style="flex:0.8;min-width:72px" oninput="_termijnenTemp[${i}].bedrag=Number(this.value)||0;updateTermijnTotal()">
+      ${fins.length?`<select style="flex:1;min-width:110px;font-size:12px;padding:5px 6px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--surf)" onchange="_termijnenTemp[${i}].finId=this.value">
+        <option value="">— Bron —</option>
+        ${fins.map(f=>`<option value="${f.id}" ${t.finId===f.id?'selected':''}>${esc(f.naam)}</option>`).join('')}
+      </select>`:''}
       <label class="fca g4" style="flex-shrink:0;font-size:12px;cursor:pointer;white-space:nowrap">
         <input type="checkbox" ${t.betaald?'checked':''} onchange="_termijnenTemp[${i}].betaald=this.checked" style="margin:0;accent-color:var(--grn)"> Betaald
       </label>
@@ -2371,6 +2503,16 @@ function kostTypeChange(){
   const type=document.getElementById('kost-type')?.value;
   const rf=document.getElementById('kost-ruimte-ff');
   if(rf)rf.style.display=type==='ruimte'?'block':'none';
+  const isSubsidie=type==='subsidie';
+  const of=document.getElementById('kost-ontvangen-ff');
+  if(of)of.style.display=isSubsidie?'block':'none';
+  // Filter fin-dropdown: subsidie posten → alleen subsidie bronnen, rest → geen subsidie bronnen
+  const _finSel=document.getElementById('kost-fin');
+  if(!_finSel)return;
+  const huidig=_finSel.value;
+  const fins=arr(S.settings.financiering).filter(f=>isSubsidie?(f.type==='subsidie'):(f.type!=='subsidie'));
+  _finSel.innerHTML='<option value="">— Niet toegewezen —</option>'+fins.map(f=>`<option value="${f.id}">${esc(f.naam)} (${FINLABELS[f.type||'anders']})</option>`).join('');
+  if(fins.find(f=>f.id===huidig))_finSel.value=huidig;
 }
 
 function openKostModal(id,rid,type){
@@ -2380,16 +2522,12 @@ function openKostModal(id,rid,type){
   document.getElementById('kost-btw-incl').value='incl';
   document.getElementById('kost-btw-preview').style.display='none';
   document.getElementById('kost-del-btn').style.display='none';
+  document.getElementById('kost-ontvangen').checked=false;
   _termijnenTemp=[];
   renderLifecycleBtns('raming');
   buildContactDropdown('kost-contact-wrap','');
-  // Financieringsbron dropdown opbouwen
-  const _finSel=document.getElementById('kost-fin');
-  _finSel.innerHTML='<option value="">— Niet toegewezen —</option>';
   const _fins=arr(S.settings.financiering);
-  _fins.forEach(f=>{const o=document.createElement('option');o.value=f.id;o.textContent=f.naam+' ('+FINLABELS[f.type||'anders']+')';_finSel.appendChild(o);});
   document.getElementById('kost-fin-ff').style.display=_fins.length?'':'none';
-  _finSel.value='';
 
   if(id){
     const k=S.kosten.find(x=>x.id===id);if(!k)return;
@@ -2403,9 +2541,10 @@ function openKostModal(id,rid,type){
     document.getElementById('kost-del-btn').style.display='inline-flex';
     renderLifecycleBtns(k.lifecycle||'raming');
     buildContactDropdown('kost-contact-wrap',k.contactId||'');
-    _finSel.value=k.finId||'';
     _termijnenTemp=(k.termijnen||[]).map(t=>({...t}));
     kostTypeChange();
+    document.getElementById('kost-fin').value=k.finId||'';
+    document.getElementById('kost-ontvangen').checked=!!k.ontvangen;
     renderRuimteCheckboxes(k.rids||(k.rid?[{rid:k.rid,pct:100}]:[]));
     updateBtwPreview();
   } else {
@@ -2449,8 +2588,9 @@ function saveKost(){
   }
 
   const finId=document.getElementById('kost-fin').value||null;
+  const ontvangen=type==='subsidie'?document.getElementById('kost-ontvangen').checked:false;
   const data={naam,bedrag,bedragExcl,btwBedrag,btwPct,btwIncl:isIncl,type,rid,rids,
-    lifecycle:_kostLifecycle,contactId:validContactId,notitie,finId,
+    lifecycle:_kostLifecycle,contactId:validContactId,notitie,finId,ontvangen,
     termijnen:_termijnenTemp.map(t=>({...t}))};
 
   if(id){const i=S.kosten.findIndex(x=>x.id===id);if(i>=0)Object.assign(S.kosten[i],data);}
