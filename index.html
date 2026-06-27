@@ -336,6 +336,16 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 .fin-bar{height:4px;background:rgba(0,0,0,.08);border-radius:2px;margin-top:5px;overflow:hidden}
 .fin-bar-fill{height:100%;border-radius:2px;transition:width .4s}
 .fin-totaal{background:var(--surf2);border-radius:8px;padding:12px 16px;margin-top:14px;display:flex;justify-content:space-between;align-items:center}
+/* ── Facturen ─────────────────────────── */
+.fac-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.fac-row:last-child{border-bottom:none}
+.fac-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--surf2);color:var(--mut);text-transform:uppercase;letter-spacing:.3px;flex-shrink:0}
+.fac-badge.betaald{background:#dcfce7;color:#15803d}
+.fac-kost-row{display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--surf2);border-radius:5px;margin-bottom:4px}
+.fac-kost-row input[type=number]{width:90px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;text-align:right}
+.fac-kost-row input[type=number].edited{border-color:var(--acc);background:var(--acc-lt)}
+.fac-pct-bar{display:flex;align-items:center;gap:8px;background:var(--surf2);border-radius:6px;padding:8px 12px;margin-bottom:10px}
+.fac-pct-bar input[type=number]{width:64px;font-size:14px;font-weight:600;padding:4px 8px;border:1px solid var(--border);border-radius:5px;text-align:center}
 
 /* ── Ruimte verdeling ────────────────────── */
 .verd-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
@@ -796,6 +806,39 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
   </div>
 </div></div>
 
+<!-- Factuur -->
+<div class="mbg" id="m-factuur"><div class="mbox mbox-lg">
+  <h3 id="m-fac-title">Factuur toevoegen</h3>
+  <input type="hidden" id="fac-id">
+  <div class="frow">
+    <div class="ff"><label>Omschrijving</label><input type="text" id="fac-omschrijving" placeholder="bijv. Termijn 1 aannemer"></div>
+    <div class="ff" style="max-width:140px"><label>Datum</label><input type="date" id="fac-datum"></div>
+  </div>
+  <div class="ff" id="fac-fin-ff">
+    <label>Financieringsbron</label>
+    <select id="fac-fin"><option value="">— Niet gekoppeld —</option></select>
+  </div>
+  <div class="fac-pct-bar">
+    <label style="margin:0;font-size:13px;font-weight:500;flex-shrink:0">Globaal percentage:</label>
+    <input type="number" id="fac-pct" min="0" max="100" step="1" placeholder="40" oninput="facPctChange()">
+    <span style="font-size:13px;color:var(--mut)">% van elke post</span>
+    <span style="font-size:11px;color:var(--mut2);margin-left:auto">Laat leeg voor handmatige bedragen</span>
+  </div>
+  <div class="ff">
+    <label>Kostenposten</label>
+    <div id="fac-kosten-list" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+  </div>
+  <div style="background:var(--surf2);border-radius:6px;padding:10px 14px;margin-top:4px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:var(--mut)">Factuur totaal</span>
+    <span id="fac-totaal-preview" style="font-size:16px;font-weight:700">€ 0</span>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-d btn-sm" id="fac-del-btn" onclick="deleteFactuur()" style="display:none;margin-right:auto">Verwijder</button>
+    <button class="btn btn-g btn-sm" onclick="closeModal('m-factuur')">Annuleer</button>
+    <button class="btn btn-p btn-sm" onclick="saveFactuur()">Opslaan</button>
+  </div>
+</div></div>
+
 <div id="toast"></div>
 
 <script>
@@ -1098,6 +1141,14 @@ function normalizeState(){
   if(S.settings.budget===undefined||S.settings.budget===null)S.settings.budget=0;
   if(!S.settings.financiering)S.settings.financiering=[];
   S.settings.financiering=arr(S.settings.financiering);
+  // Facturen
+  S.facturen=arr(S.facturen);
+  S.facturen.forEach(f=>{
+    f.regels=arr(f.regels);
+    if(f.betaald===undefined||f.betaald===null)f.betaald=false;
+    if(!f.datum)f.datum='';
+    f.regels.forEach(r=>{if(r.bedrag===undefined)r.bedrag=0;});
+  });
   // Ruimtes
   S.ruimtes.forEach(r=>{
     if(!r||typeof r!=='object')return;
@@ -1964,6 +2015,134 @@ function quickAssignTermijn(kostId, termijnId, finId) {
   save();render();toast(finId?'Toegewezen':'Ontkoppeld');
 }
 
+// ── Facturen ─────────────────────────────────────────────────
+let _facEdited=new Set(); // bijhouden welke kostId-bedragen handmatig zijn aangepast
+
+function facTotaalPreview(){
+  let totaal=0;
+  document.querySelectorAll('#fac-kosten-list input[type=checkbox]:checked').forEach(cb=>{
+    const inp=document.getElementById('fac-bedrag-'+cb.value);
+    totaal+=parseFloat(inp?.value||0)||0;
+  });
+  document.getElementById('fac-totaal-preview').textContent=fmt(totaal);
+}
+
+function facPctChange(){
+  const pct=parseFloat(document.getElementById('fac-pct').value)||0;
+  document.querySelectorAll('#fac-kosten-list input[type=checkbox]').forEach(cb=>{
+    if(!_facEdited.has(cb.value)){
+      const k=S.kosten.find(x=>x.id===cb.value);
+      if(k){
+        const inp=document.getElementById('fac-bedrag-'+cb.value);
+        if(inp)inp.value=cb.checked?Math.round(Number(k.bedrag||0)*pct/100):'';
+      }
+    }
+  });
+  facTotaalPreview();
+}
+
+function openFactuurModal(id){
+  document.getElementById('m-fac-title').textContent=id?'Factuur bewerken':'Factuur toevoegen';
+  document.getElementById('fac-id').value=id||'';
+  document.getElementById('fac-omschrijving').value='';
+  document.getElementById('fac-datum').value='';
+  document.getElementById('fac-pct').value='';
+  document.getElementById('fac-del-btn').style.display='none';
+  _facEdited=new Set();
+  // Financieringsbron dropdown (geen subsidie bronnen)
+  const fins=arr(S.settings.financiering).filter(f=>f.type!=='subsidie');
+  const finSel=document.getElementById('fac-fin');
+  finSel.innerHTML='<option value="">— Niet gekoppeld —</option>'+fins.map(f=>`<option value="${f.id}">${esc(f.naam)} (${FINLABELS[f.type||'anders']})</option>`).join('');
+  document.getElementById('fac-fin-ff').style.display=fins.length?'':'none';
+  // Kostenpost lijst (geen subsidies)
+  const kosten=S.kosten.filter(k=>k.type!=='subsidie');
+  const listEl=document.getElementById('fac-kosten-list');
+  listEl.innerHTML='';
+  kosten.forEach(k=>{
+    const row=document.createElement('div');
+    row.className='fac-kost-row';
+    row.innerHTML=`<input type="checkbox" id="fac-cb-${k.id}" value="${k.id}" style="width:15px;height:15px;flex-shrink:0" onchange="facCbChange('${k.id}')">
+      <label for="fac-cb-${k.id}" style="flex:1;font-size:13px;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(k.naam)}">${esc(k.naam)}</label>
+      <span class="sl" style="font-size:11px;flex-shrink:0">${fmt(k.bedrag)}</span>
+      <input type="number" id="fac-bedrag-${k.id}" min="0" step="100" placeholder="0" style="display:none" oninput="_facEdited.add('${k.id}');document.getElementById('fac-bedrag-${k.id}').classList.add('edited');facTotaalPreview()">`;
+    listEl.appendChild(row);
+  });
+  if(id){
+    const fac=arr(S.facturen).find(x=>x.id===id);
+    if(fac){
+      document.getElementById('fac-omschrijving').value=fac.omschrijving||'';
+      document.getElementById('fac-datum').value=fac.datum||'';
+      finSel.value=fac.finId||'';
+      document.getElementById('fac-del-btn').style.display='inline-flex';
+      fac.regels.forEach(r=>{
+        const cb=document.getElementById('fac-cb-'+r.kostId);
+        const inp=document.getElementById('fac-bedrag-'+r.kostId);
+        if(cb&&inp){cb.checked=true;inp.style.display='';inp.value=r.bedrag;_facEdited.add(r.kostId);}
+      });
+    }
+  }
+  facTotaalPreview();
+  openModal('m-factuur');
+}
+
+function facCbChange(kostId){
+  const cb=document.getElementById('fac-cb-'+kostId);
+  const inp=document.getElementById('fac-bedrag-'+kostId);
+  if(!inp)return;
+  if(cb.checked){
+    inp.style.display='';
+    if(!_facEdited.has(kostId)){
+      const pct=parseFloat(document.getElementById('fac-pct').value)||0;
+      const k=S.kosten.find(x=>x.id===kostId);
+      inp.value=pct&&k?Math.round(Number(k.bedrag||0)*pct/100):'';
+    }
+  } else {
+    inp.style.display='none';
+    inp.value='';
+    _facEdited.delete(kostId);
+    inp.classList.remove('edited');
+  }
+  facTotaalPreview();
+}
+
+function saveFactuur(){
+  const id=document.getElementById('fac-id').value;
+  const omschrijving=document.getElementById('fac-omschrijving').value.trim();
+  if(!omschrijving){alert('Geef een omschrijving op');return;}
+  const datum=document.getElementById('fac-datum').value;
+  const finId=document.getElementById('fac-fin').value||null;
+  const regels=[];
+  document.querySelectorAll('#fac-kosten-list input[type=checkbox]:checked').forEach(cb=>{
+    const kostId=cb.value;
+    const bedrag=parseFloat(document.getElementById('fac-bedrag-'+kostId)?.value)||0;
+    if(bedrag>0)regels.push({kostId,bedrag});
+  });
+  if(!regels.length){alert('Selecteer minstens één kostenpost met een bedrag');return;}
+  const data={omschrijving,datum,finId,betaald:false,regels};
+  if(id){
+    const i=arr(S.facturen).findIndex(x=>x.id===id);
+    if(i>=0){data.betaald=S.facturen[i].betaald;S.facturen[i]=Object.assign({},S.facturen[i],data);}
+  } else {
+    if(!S.facturen)S.facturen=[];
+    S.facturen.push({id:uid(),...data});
+  }
+  save();closeModal('m-factuur');render();toast('Factuur opgeslagen');
+}
+
+function deleteFactuur(){
+  const id=document.getElementById('fac-id').value;
+  if(!confirm('Factuur verwijderen?'))return;
+  S.facturen=arr(S.facturen).filter(x=>x.id!==id);
+  save();closeModal('m-factuur');render();toast('Verwijderd');
+}
+
+function toggleFactuurBetaald(id){
+  const fac=arr(S.facturen).find(x=>x.id===id);
+  if(!fac)return;
+  fac.betaald=!fac.betaald;
+  save();render();toast(fac.betaald?'Gemarkeerd als betaald':'Betaald ongedaan gemaakt');
+}
+
 function renderBudget(){
   const budget=Number(S.settings.budget||0);
   // Sluit subsidies uit van 'kosten' totaal
@@ -2107,6 +2286,7 @@ function renderBudget(){
 
   // ── Financieringsbronnen ─────────────────
   const fin=arr(S.settings.financiering);
+  const facturenAll=arr(S.facturen);
   const finTotaal=fin.reduce((s,f)=>s+Number(f.bedrag||0),0);
   // Optie A: vergelijk totaal bronnen vs bruto kosten (subsidies zitten als bron mee)
   const grossKosten=eindtotaal+subsidieTotal;
@@ -2184,8 +2364,13 @@ function renderBudget(){
       const gresKosten=kosten.filter(k=>k.finId===f.id&&(!k.termijnen||!k.termijnen.length)).reduce((s,k)=>s+Number(k.bedrag||0),0);
       const gresTermijnen=allTermijnenFlat.filter(t=>t.finId===f.id);
       const gresTermijnenAmt=gresTermijnen.reduce((s,t)=>s+Number(t.bedrag||0),0);
-      const betaaldBron=gresTermijnen.filter(t=>t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0);
-      const gereserveerd=gresKosten+gresTermijnenAmt;
+      const betaaldTermijnen=gresTermijnen.filter(t=>t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0);
+      // Factuurregels via deze bron
+      const gresFacBron=facturenAll.filter(fac=>fac.finId===f.id);
+      const gresFacAmt=gresFacBron.reduce((s,fac)=>s+fac.regels.reduce((rs,r)=>rs+Number(r.bedrag||0),0),0);
+      const betaaldFac=gresFacBron.filter(fac=>fac.betaald).reduce((s,fac)=>s+fac.regels.reduce((rs,r)=>rs+Number(r.bedrag||0),0),0);
+      const gereserveerd=gresKosten+gresTermijnenAmt+gresFacAmt;
+      const betaaldBron=betaaldTermijnen+betaaldFac;
       const saldo=bedrag-gereserveerd;
       const saldoOk=saldo>=0;
       const bezPct=bedrag?Math.min(100,Math.round(gereserveerd/bedrag*100)):0;
@@ -2196,6 +2381,7 @@ function renderBudget(){
             <span class="fin-naam">${esc(f.naam)}</span>
             <span class="fin-type fin-type-${f.type||'anders'}">${FINLABELS[f.type||'anders']}</span>
             ${f.note?`<span class="sl" style="font-size:11px">${esc(f.note)}</span>`:''}
+            ${gresFacBron.length?`<span style="font-size:10px;background:#e0e7ff;color:#3730a3;border-radius:8px;padding:1px 6px;font-weight:700">${gresFacBron.length} factuur${gresFacBron.length===1?'':'s'}</span>`:''}
           </div>
           <div class="fin-bar mt4"><div class="fin-bar-fill" style="width:${bezPct}%;background:${saldoOk?kleur:'var(--red)'}"></div></div>
           <div class="fin-saldo">
@@ -2274,12 +2460,60 @@ function renderBudget(){
     </div>`:``}
   </div>`;
 
+  // ── Facturen kaart ───────────────────────
+  const facTotaalBetaald=facturenAll.filter(f=>f.betaald).reduce((s,f)=>s+f.regels.reduce((rs,r)=>rs+Number(r.bedrag||0),0),0);
+  const facTotaalOpen=facturenAll.filter(f=>!f.betaald).reduce((s,f)=>s+f.regels.reduce((rs,r)=>rs+Number(r.bedrag||0),0),0);
+  h+=`<div class="card mb16">
+    <div class="fb mb12">
+      <div>
+        <div class="ctitle">Facturen</div>
+        <div class="sl">${facturenAll.length?`${facturenAll.length} factuur${facturenAll.length===1?'':'s'} · betaald ${fmt(facTotaalBetaald)} · openstaand ${fmt(facTotaalOpen)}`:'Groepeer betalingen over meerdere kostenposten'}</div>
+      </div>
+      <button class="btn btn-p btn-sm" onclick="openFactuurModal()">+ Factuur</button>
+    </div>
+    ${facturenAll.length?facturenAll.sort((a,b)=>(!a.datum?1:!b.datum?-1:a.datum.localeCompare(b.datum))).map(fac=>{
+      const facBedrag=fac.regels.reduce((s,r)=>s+Number(r.bedrag||0),0);
+      const bronFac=fac.finId?fin.find(f=>f.id===fac.finId):null;
+      const datumStr=fac.datum?new Date(fac.datum+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}):'Geen datum';
+      return`<div class="fac-row">
+        <div style="flex:1;min-width:0">
+          <div class="fca g8 mb4">
+            <span style="font-weight:600;font-size:13px">${esc(fac.omschrijving)}</span>
+            <span class="fac-badge ${fac.betaald?'betaald':''}">${fac.betaald?'Betaald':'Openstaand'}</span>
+            ${bronFac?`<span style="font-size:11px;padding:1px 6px;border-radius:8px;background:${FINKLEUREN[bronFac.type||'anders']}22;color:${FINKLEUREN[bronFac.type||'anders']};font-weight:600">${esc(bronFac.naam)}</span>`:''}
+          </div>
+          <div class="sl" style="font-size:11px">${datumStr} · ${fac.regels.length} post${fac.regels.length===1?'':'en'}: ${fac.regels.map(r=>{const k=S.kosten.find(x=>x.id===r.kostId);return k?esc(k.naam.substring(0,20)):'?';}).join(', ')}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;padding-left:10px">
+          <div style="font-weight:700;font-size:15px">${fmt(facBedrag)}</div>
+          <div class="fca g4 mt6" style="justify-content:flex-end">
+            <button class="btn btn-xs ${fac.betaald?'btn-g':'btn-p'}" onclick="toggleFactuurBetaald('${fac.id}')">${fac.betaald?'↩ Ongedaan':'✓ Betaald'}</button>
+            <button class="ibtn" style="font-size:12px" onclick="openFactuurModal('${fac.id}')">✏️</button>
+          </div>
+        </div>
+      </div>`;
+    }).join(''):`<div style="padding:8px 0"><span class="sl">Nog geen facturen — handig als één factuur meerdere posten dekt.</span></div>`}
+  </div>`;
+
   // ── Cashflow overzicht ───────────────────
   const allTermijnen=[];
   S.kosten.forEach(k=>{
     if(k.termijnen&&k.termijnen.length){
-      k.termijnen.forEach(t=>allTermijnen.push({...t,kostNaam:k.naam,contactId:k.contactId,_effectiveFinId:t.finId||k.finId||''}));
+      k.termijnen.forEach(t=>allTermijnen.push({...t,kostNaam:k.naam,contactId:k.contactId,_effectiveFinId:t.finId||k.finId||'',_isFac:false}));
     }
+  });
+  // Factuurregels als cashflow-items toevoegen
+  facturenAll.forEach(fac=>{
+    fac.regels.forEach(r=>{
+      const k=S.kosten.find(x=>x.id===r.kostId);
+      allTermijnen.push({
+        id:fac.id+'_'+r.kostId, datum:fac.datum,
+        omschrijving:fac.omschrijving, bedrag:r.bedrag,
+        betaald:fac.betaald, kostNaam:k?k.naam:'?',
+        contactId:k?k.contactId:null,
+        _effectiveFinId:fac.finId||'', _isFac:true, _facId:fac.id
+      });
+    });
   });
   if(allTermijnen.length){
     allTermijnen.sort((a,b)=>(!a.datum?1:!b.datum?-1:a.datum.localeCompare(b.datum)));
@@ -2289,10 +2523,12 @@ function renderBudget(){
       if(!byMonth[key])byMonth[key]=[];
       byMonth[key].push(t);
     });
+    const termijnCount=allTermijnen.filter(t=>!t._isFac).length;
+    const facCount=allTermijnen.filter(t=>t._isFac).length;
     h+=`<div class="bud-section mb14">
       <div class="bud-sec-hd" onclick="this.nextElementSibling.classList.toggle('open')">
         <h3>📅 Cashflow — betaalschema</h3>
-        <span class="bold">${allTermijnen.length} termijnen</span>
+        <span class="bold">${termijnCount?termijnCount+' termijn'+(termijnCount===1?'':'en'):''}${termijnCount&&facCount?' · ':''}${facCount?facCount+' factuurregels':''}</span>
       </div>
       <div class="bud-sec-body open" style="padding:14px 18px">`;
     Object.keys(byMonth).sort().forEach(key=>{
@@ -2307,6 +2543,7 @@ function renderBudget(){
           <div class="cf-info">
             <div class="cf-name fca g6">
               ${bronT?`<span style="width:8px;height:8px;border-radius:50%;background:${FINKLEUREN[bronT.type||'anders']};flex-shrink:0"></span>`:'<span style="width:8px;height:8px;border-radius:50%;background:var(--border2);flex-shrink:0" title="Geen bron"></span>'}
+              ${t._isFac?`<span style="font-size:10px;background:#e0e7ff;color:#3730a3;border-radius:4px;padding:1px 5px;font-weight:700">FAC</span>`:''}
               ${esc(t.omschrijving||t.kostNaam)}
             </div>
             <div class="cf-sub">${esc(t.kostNaam)}${ct?` · ${esc(ct.naam)}`:''} ${bronT?`· <span style="color:${FINKLEUREN[bronT.type||'anders']}">${esc(bronT.naam)}</span>`:'· <span style="color:var(--mut2)">geen bron</span>'} ${t.betaald?'· ✓ Betaald':''}</div>
