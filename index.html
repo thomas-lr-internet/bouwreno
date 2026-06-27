@@ -814,23 +814,38 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
     <div class="ff"><label>Omschrijving</label><input type="text" id="fac-omschrijving" placeholder="bijv. Termijn 1 aannemer"></div>
     <div class="ff" style="max-width:140px"><label>Datum</label><input type="date" id="fac-datum"></div>
   </div>
-  <div class="ff" id="fac-fin-ff">
-    <label>Financieringsbron</label>
-    <select id="fac-fin"><option value="">— Niet gekoppeld —</option></select>
+  <div class="frow">
+    <div class="ff" id="fac-fin-ff">
+      <label>Financieringsbron</label>
+      <select id="fac-fin"><option value="">— Niet gekoppeld —</option></select>
+    </div>
+    <div class="ff" style="max-width:180px">
+      <label>Factuur bedrag (€)</label>
+      <input type="number" id="fac-factuur-bedrag" min="0" step="100" placeholder="0" oninput="facTotaalPreview()" style="font-size:15px;font-weight:600">
+    </div>
   </div>
   <div class="fac-pct-bar">
-    <label style="margin:0;font-size:13px;font-weight:500;flex-shrink:0">Globaal percentage:</label>
-    <input type="number" id="fac-pct" min="0" max="100" step="1" placeholder="40" oninput="facPctChange()">
-    <span style="font-size:13px;color:var(--mut)">% van elke post</span>
-    <span style="font-size:11px;color:var(--mut2);margin-left:auto">Laat leeg voor handmatige bedragen</span>
+    <label style="margin:0;font-size:12px;color:var(--mut);flex-shrink:0">Snel invullen:</label>
+    <input type="number" id="fac-pct" min="0" max="100" step="1" placeholder="40" oninput="facPctChange()" style="width:56px">
+    <span style="font-size:12px;color:var(--mut)">% voor elke aangevinkte post</span>
   </div>
-  <div class="ff">
-    <label>Kostenposten</label>
-    <div id="fac-kosten-list" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+  <div class="ff" style="margin-top:4px">
+    <label>Kostenposten — vul het bedrag in per post</label>
+    <div id="fac-kosten-list" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
   </div>
-  <div style="background:var(--surf2);border-radius:6px;padding:10px 14px;margin-top:4px;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:13px;color:var(--mut)">Factuur totaal</span>
-    <span id="fac-totaal-preview" style="font-size:16px;font-weight:700">€ 0</span>
+  <div style="background:var(--surf2);border-radius:6px;padding:10px 14px;margin-top:6px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+    <div style="text-align:center">
+      <div style="font-size:11px;color:var(--mut);margin-bottom:2px">Factuur bedrag</div>
+      <div id="fac-totaal-inp" style="font-size:14px;font-weight:700">€ 0</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:11px;color:var(--mut);margin-bottom:2px">Toegewezen</div>
+      <div id="fac-totaal-preview" style="font-size:14px;font-weight:700">€ 0</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:11px;color:var(--mut);margin-bottom:2px">Nog te verdelen</div>
+      <div id="fac-rest-preview" style="font-size:14px;font-weight:700;color:var(--mut)">€ 0</div>
+    </div>
   </div>
   <div class="mfoot">
     <button class="btn btn-d btn-sm" id="fac-del-btn" onclick="deleteFactuur()" style="display:none;margin-right:auto">Verwijder</button>
@@ -2019,22 +2034,37 @@ function quickAssignTermijn(kostId, termijnId, finId) {
 let _facEdited=new Set(); // bijhouden welke kostId-bedragen handmatig zijn aangepast
 
 function facTotaalPreview(){
-  let totaal=0;
+  let toegewezen=0;
   document.querySelectorAll('#fac-kosten-list input[type=checkbox]:checked').forEach(cb=>{
     const inp=document.getElementById('fac-bedrag-'+cb.value);
-    totaal+=parseFloat(inp?.value||0)||0;
+    toegewezen+=parseFloat(inp?.value||0)||0;
   });
-  document.getElementById('fac-totaal-preview').textContent=fmt(totaal);
+  const facBedrag=parseFloat(document.getElementById('fac-factuur-bedrag')?.value)||0;
+  const rest=facBedrag-toegewezen;
+  document.getElementById('fac-totaal-inp').textContent=fmt(facBedrag);
+  document.getElementById('fac-totaal-preview').textContent=fmt(toegewezen);
+  const restEl=document.getElementById('fac-rest-preview');
+  restEl.textContent=rest===0?'✓ Klopt':rest>0?fmt(rest):('−'+fmt(-rest));
+  restEl.style.color=rest===0?'var(--grn)':rest<0?'var(--red)':'var(--acc-dk)';
+}
+
+function facVolledig(kostId){
+  const k=S.kosten.find(x=>x.id===kostId);
+  if(!k)return;
+  const inp=document.getElementById('fac-bedrag-'+kostId);
+  if(inp){inp.value=k.bedrag;inp.classList.add('edited');_facEdited.add(kostId);}
+  facTotaalPreview();
 }
 
 function facPctChange(){
   const pct=parseFloat(document.getElementById('fac-pct').value)||0;
-  document.querySelectorAll('#fac-kosten-list input[type=checkbox]').forEach(cb=>{
+  if(!pct)return;
+  document.querySelectorAll('#fac-kosten-list input[type=checkbox]:checked').forEach(cb=>{
     if(!_facEdited.has(cb.value)){
       const k=S.kosten.find(x=>x.id===cb.value);
       if(k){
         const inp=document.getElementById('fac-bedrag-'+cb.value);
-        if(inp)inp.value=cb.checked?Math.round(Number(k.bedrag||0)*pct/100):'';
+        if(inp)inp.value=Math.round(Number(k.bedrag||0)*pct/100);
       }
     }
   });
@@ -2047,13 +2077,14 @@ function openFactuurModal(id){
   document.getElementById('fac-omschrijving').value='';
   document.getElementById('fac-datum').value='';
   document.getElementById('fac-pct').value='';
+  document.getElementById('fac-factuur-bedrag').value='';
   document.getElementById('fac-del-btn').style.display='none';
   _facEdited=new Set();
   // Financieringsbron dropdown (geen subsidie bronnen)
   const fins=arr(S.settings.financiering).filter(f=>f.type!=='subsidie');
   const finSel=document.getElementById('fac-fin');
   finSel.innerHTML='<option value="">— Niet gekoppeld —</option>'+fins.map(f=>`<option value="${f.id}">${esc(f.naam)} (${FINLABELS[f.type||'anders']})</option>`).join('');
-  document.getElementById('fac-fin-ff').style.display=fins.length?'':'none';
+  document.getElementById('fac-fin-ff').style.display=fins.length?'block':'none';
   // Kostenpost lijst (geen subsidies)
   const kosten=S.kosten.filter(k=>k.type!=='subsidie');
   const listEl=document.getElementById('fac-kosten-list');
@@ -2063,8 +2094,9 @@ function openFactuurModal(id){
     row.className='fac-kost-row';
     row.innerHTML=`<input type="checkbox" id="fac-cb-${k.id}" value="${k.id}" style="width:15px;height:15px;flex-shrink:0" onchange="facCbChange('${k.id}')">
       <label for="fac-cb-${k.id}" style="flex:1;font-size:13px;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(k.naam)}">${esc(k.naam)}</label>
-      <span class="sl" style="font-size:11px;flex-shrink:0">${fmt(k.bedrag)}</span>
-      <input type="number" id="fac-bedrag-${k.id}" min="0" step="100" placeholder="0" style="display:none" oninput="_facEdited.add('${k.id}');document.getElementById('fac-bedrag-${k.id}').classList.add('edited');facTotaalPreview()">`;
+      <span class="sl" style="font-size:11px;flex-shrink:0;min-width:54px;text-align:right">${fmt(k.bedrag)}</span>
+      <button type="button" class="btn btn-xs btn-g" id="fac-vol-${k.id}" style="display:none;font-size:11px;padding:2px 6px" onclick="facVolledig('${k.id}')">Volledig</button>
+      <input type="number" id="fac-bedrag-${k.id}" min="0" step="100" placeholder="bedrag" style="display:none" oninput="_facEdited.add('${k.id}');document.getElementById('fac-bedrag-${k.id}').classList.add('edited');facTotaalPreview()">`;
     listEl.appendChild(row);
   });
   if(id){
@@ -2072,12 +2104,15 @@ function openFactuurModal(id){
     if(fac){
       document.getElementById('fac-omschrijving').value=fac.omschrijving||'';
       document.getElementById('fac-datum').value=fac.datum||'';
+      document.getElementById('fac-factuur-bedrag').value=fac.facBedrag||'';
       finSel.value=fac.finId||'';
       document.getElementById('fac-del-btn').style.display='inline-flex';
       fac.regels.forEach(r=>{
         const cb=document.getElementById('fac-cb-'+r.kostId);
         const inp=document.getElementById('fac-bedrag-'+r.kostId);
+        const vol=document.getElementById('fac-vol-'+r.kostId);
         if(cb&&inp){cb.checked=true;inp.style.display='';inp.value=r.bedrag;_facEdited.add(r.kostId);}
+        if(vol)vol.style.display='';
       });
     }
   }
@@ -2088,9 +2123,11 @@ function openFactuurModal(id){
 function facCbChange(kostId){
   const cb=document.getElementById('fac-cb-'+kostId);
   const inp=document.getElementById('fac-bedrag-'+kostId);
+  const vol=document.getElementById('fac-vol-'+kostId);
   if(!inp)return;
   if(cb.checked){
     inp.style.display='';
+    if(vol)vol.style.display='';
     if(!_facEdited.has(kostId)){
       const pct=parseFloat(document.getElementById('fac-pct').value)||0;
       const k=S.kosten.find(x=>x.id===kostId);
@@ -2098,6 +2135,7 @@ function facCbChange(kostId){
     }
   } else {
     inp.style.display='none';
+    if(vol)vol.style.display='none';
     inp.value='';
     _facEdited.delete(kostId);
     inp.classList.remove('edited');
@@ -2111,6 +2149,7 @@ function saveFactuur(){
   if(!omschrijving){alert('Geef een omschrijving op');return;}
   const datum=document.getElementById('fac-datum').value;
   const finId=document.getElementById('fac-fin').value||null;
+  const facBedrag=parseFloat(document.getElementById('fac-factuur-bedrag').value)||0;
   const regels=[];
   document.querySelectorAll('#fac-kosten-list input[type=checkbox]:checked').forEach(cb=>{
     const kostId=cb.value;
@@ -2118,7 +2157,7 @@ function saveFactuur(){
     if(bedrag>0)regels.push({kostId,bedrag});
   });
   if(!regels.length){alert('Selecteer minstens één kostenpost met een bedrag');return;}
-  const data={omschrijving,datum,finId,betaald:false,regels};
+  const data={omschrijving,datum,finId,facBedrag,betaald:false,regels};
   if(id){
     const i=arr(S.facturen).findIndex(x=>x.id===id);
     if(i>=0){data.betaald=S.facturen[i].betaald;S.facturen[i]=Object.assign({},S.facturen[i],data);}
