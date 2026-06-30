@@ -2143,6 +2143,19 @@ function facCbChange(kostId){
   facTotaalPreview();
 }
 
+function _facSyncTermijnen(facId, omschrijving, datum, finId, betaald, regels){
+  // Verwijder alle bestaande termijnen die aan deze factuur gekoppeld zijn
+  S.kosten.forEach(k=>{k.termijnen=arr(k.termijnen).filter(t=>t.factuurId!==facId);});
+  // Voeg nieuwe termijnen toe per regel
+  regels.forEach(r=>{
+    const k=S.kosten.find(x=>x.id===r.kostId);
+    if(!k)return;
+    k.termijnen=arr(k.termijnen);
+    k.termijnen.push({id:uid(),datum,omschrijving,bedrag:r.bedrag,
+      betaald,finId:finId||'',factuurId:facId});
+  });
+}
+
 function saveFactuur(){
   const id=document.getElementById('fac-id').value;
   const omschrijving=document.getElementById('fac-omschrijving').value.trim();
@@ -2157,20 +2170,24 @@ function saveFactuur(){
     if(bedrag>0)regels.push({kostId,bedrag});
   });
   if(!regels.length){alert('Selecteer minstens één kostenpost met een bedrag');return;}
+  let facId=id;
   const data={omschrijving,datum,finId,facBedrag,betaald:false,regels};
   if(id){
     const i=arr(S.facturen).findIndex(x=>x.id===id);
     if(i>=0){data.betaald=S.facturen[i].betaald;S.facturen[i]=Object.assign({},S.facturen[i],data);}
   } else {
     if(!S.facturen)S.facturen=[];
-    S.facturen.push({id:uid(),...data});
+    facId=uid();
+    S.facturen.push({id:facId,...data});
   }
+  _facSyncTermijnen(facId,data.omschrijving,data.datum,data.finId,data.betaald,data.regels);
   save();closeModal('m-factuur');render();toast('Factuur opgeslagen');
 }
 
 function deleteFactuur(){
   const id=document.getElementById('fac-id').value;
   if(!confirm('Factuur verwijderen?'))return;
+  S.kosten.forEach(k=>{k.termijnen=arr(k.termijnen).filter(t=>t.factuurId!==id);});
   S.facturen=arr(S.facturen).filter(x=>x.id!==id);
   save();closeModal('m-factuur');render();toast('Verwijderd');
 }
@@ -2179,6 +2196,9 @@ function toggleFactuurBetaald(id){
   const fac=arr(S.facturen).find(x=>x.id===id);
   if(!fac)return;
   fac.betaald=!fac.betaald;
+  S.kosten.forEach(k=>{
+    arr(k.termijnen).forEach(t=>{if(t.factuurId===id)t.betaald=fac.betaald;});
+  });
   save();render();toast(fac.betaald?'Gemarkeerd als betaald':'Betaald ongedaan gemaakt');
 }
 
@@ -2221,8 +2241,11 @@ function renderBudget(){
   function kostRij(k,indent){
     const lc=k.lifecycle||'raming';
     const ct=k.contactId?(S.contacten||[]).find(c=>c.id===k.contactId):null;
-    const termPaid=k.termijnen&&k.termijnen.length?k.termijnen.filter(t=>t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0):null;
-    const termOpen=k.termijnen&&k.termijnen.length?k.termijnen.filter(t=>!t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0):null;
+    const termijnen=arr(k.termijnen);
+    const termPaid=termijnen.length?termijnen.filter(t=>t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0):null;
+    const termOpen=termijnen.length?termijnen.filter(t=>!t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0):null;
+    const termTotaal=termijnen.reduce((s,t)=>s+Number(t.bedrag||0),0);
+    const nogTePlannen=termijnen.length?Math.max(0,Number(k.bedrag||0)-termTotaal):null;
     return `<div class="kost-row" ${indent?'style="padding-left:20px"':''}>
       <div style="flex:1;min-width:0">
         <div class="${indent?'mut':'bold'}" style="font-size:13px">${esc(k.naam)}</div>
@@ -2231,7 +2254,8 @@ function renderBudget(){
           ${ct?`<span class="sl">👤 ${esc(ct.naam)}</span>`:''}
           ${k.btwBedrag?`<span class="sl">BTW: ${fmt(k.btwBedrag)}</span>`:''}
           ${termPaid!==null?`<span class="sl" style="color:var(--grn)">✓ ${fmt(termPaid)} betaald</span>`:''}
-          ${termOpen?`<span class="sl" style="color:var(--red)">⏳ ${fmt(termOpen)} open</span>`:''}
+          ${termOpen?`<span class="sl" style="color:var(--acc-dk)">⏳ ${fmt(termOpen)} open</span>`:''}
+          ${nogTePlannen?`<span class="sl" style="color:var(--mut2)">○ ${fmt(nogTePlannen)} nog te plannen</span>`:''}
           ${k.notitie?`<span class="sl" title="${esc(k.notitie)}">📝 ${esc(k.notitie.substring(0,40))}${k.notitie.length>40?'…':''}</span>`:''}
         </div>
       </div>
@@ -2481,22 +2505,14 @@ function renderBudget(){
     </div>`:''}
   </div>`;
 
-  // ── Geraamd vs offerte ───────────────────
-  h+=`<div class="g2 mb16">
-    <div class="card">
-      <div class="ctitle" style="color:${nogTeBetalen?'var(--red)':'var(--grn)'}">💳 Betalingsstatus</div>
+  // ── Betalingsstatus ──────────────────────
+  h+=`<div class="card mb16" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+    <div>
+      <div class="ctitle" style="color:${nogTeBetalen?'var(--acc-dk)':'var(--grn)'}">💳 Betalingsstatus</div>
       <div class="bignum ${nogTeBetalen>0?'red':'grn'}">${fmt(nogTeBetalen)}</div>
       <div class="sl mt4">nog te betalen</div>
-      <div class="sl mt4">${fmt(betaaldAmt)} al betaald</div>
     </div>
-    ${geraamdTaken>0?`<div class="card">
-      <div class="ctitle">📐 Geraamd vs offerte</div>
-      ${(()=>{const d=geraamdTaken-basisBesteed;const c=Math.abs(d)<1000?'grn':d>0?'red':'grn';
-        return`<div class="budget-compare" style="grid-template-columns:1fr 1fr">
-          <div class="bc-cell"><div class="bc-val">${fmt(geraamdTaken)}</div><div class="bc-lbl">Geraamd (taken)</div></div>
-          <div class="bc-cell" style="background:var(--${c}-lt)"><div class="bc-val" style="color:var(--${c})">${d>=0?'+':''}${fmt(d)}</div><div class="bc-lbl">${Math.abs(d)<1000?'Klopt goed':d>0?'Offerte hoger':'Meevaller'}</div></div>
-        </div>`;})()}
-    </div>`:``}
+    <div style="color:var(--mut);font-size:13px">${fmt(betaaldAmt)} al betaald</div>
   </div>`;
 
   // ── Facturen kaart ───────────────────────
@@ -2538,7 +2554,7 @@ function renderBudget(){
   const allTermijnen=[];
   S.kosten.forEach(k=>{
     if(k.termijnen&&k.termijnen.length){
-      k.termijnen.forEach(t=>allTermijnen.push({...t,kostNaam:k.naam,contactId:k.contactId,_effectiveFinId:t.finId||k.finId||'',_isFac:false}));
+      k.termijnen.forEach(t=>{if(!t.factuurId)allTermijnen.push({...t,kostNaam:k.naam,contactId:k.contactId,_effectiveFinId:t.finId||k.finId||'',_isFac:false});});
     }
   });
   // Factuurregels als cashflow-items toevoegen
