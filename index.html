@@ -1201,6 +1201,8 @@ function normalizeState(){
       if(t.betaald===undefined||t.betaald===null)t.betaald=false;
       if(t.bedrag===undefined)t.bedrag=0;
       if(!t.datum)t.datum='';
+      if(!t.factuurId)t.factuurId='';
+      if(t.finId===undefined)t.finId='';
     });
   });
   // Beslissingen
@@ -2032,6 +2034,7 @@ function quickAssignTermijn(kostId, termijnId, finId) {
 
 // ── Facturen ─────────────────────────────────────────────────
 let _facEdited=new Set(); // bijhouden welke kostId-bedragen handmatig zijn aangepast
+let _facBedragCache=new Map(); // cache bedrag bij uitvinken zodat re-check het herstelt
 
 function facTotaalPreview(){
   let toegewezen=0;
@@ -2079,7 +2082,7 @@ function openFactuurModal(id){
   document.getElementById('fac-pct').value='';
   document.getElementById('fac-factuur-bedrag').value='';
   document.getElementById('fac-del-btn').style.display='none';
-  _facEdited=new Set();
+  _facEdited=new Set();_facBedragCache=new Map();
   // Financieringsbron dropdown (geen subsidie bronnen)
   const fins=arr(S.settings.financiering).filter(f=>f.type!=='subsidie');
   const finSel=document.getElementById('fac-fin');
@@ -2128,12 +2131,17 @@ function facCbChange(kostId){
   if(cb.checked){
     inp.style.display='';
     if(vol)vol.style.display='';
-    if(!_facEdited.has(kostId)){
+    if(_facBedragCache.has(kostId)){
+      inp.value=_facBedragCache.get(kostId);
+      _facEdited.add(kostId);
+      inp.classList.add('edited');
+    } else if(!_facEdited.has(kostId)){
       const pct=parseFloat(document.getElementById('fac-pct').value)||0;
       const k=S.kosten.find(x=>x.id===kostId);
       inp.value=pct&&k?Math.round(Number(k.bedrag||0)*pct/100):'';
     }
   } else {
+    if(inp.value)_facBedragCache.set(kostId,inp.value);
     inp.style.display='none';
     if(vol)vol.style.display='none';
     inp.value='';
@@ -2174,7 +2182,8 @@ function saveFactuur(){
   const data={omschrijving,datum,finId,facBedrag,betaald:false,regels};
   if(id){
     const i=arr(S.facturen).findIndex(x=>x.id===id);
-    if(i>=0){data.betaald=S.facturen[i].betaald;S.facturen[i]=Object.assign({},S.facturen[i],data);}
+    if(i<0){alert('Factuur niet meer gevonden. Sluit het venster en probeer opnieuw.');return;}
+    data.betaald=S.facturen[i].betaald;S.facturen[i]=Object.assign({},S.facturen[i],data);
   } else {
     if(!S.facturen)S.facturen=[];
     facId=uid();
@@ -2357,9 +2366,10 @@ function renderBudget(){
   const finOk=finVerschil>=0;
   // Alle termijnen flat (voor per-bron berekeningen)
   const allTermijnenFlat=[];
-  S.kosten.forEach(k=>{if(k.termijnen&&k.termijnen.length)k.termijnen.forEach(t=>allTermijnenFlat.push({...t,kostId:k.id,kostNaam:k.naam,kostFinId:k.finId}));});
+  // Alleen handmatige termijnen (geen factuur-termijnen — die tellen via gresFacAmt)
+  S.kosten.forEach(k=>{if(k.termijnen&&k.termijnen.length)k.termijnen.forEach(t=>{if(!t.factuurId)allTermijnenFlat.push({...t,kostId:k.id,kostNaam:k.naam,kostFinId:k.finId});});});
   // Ongekoppeld: reguliere kosten zonder finId + termijnen zonder finId + subsidieposten zonder finId
-  const ongKosten=kosten.filter(k=>!k.finId&&(!k.termijnen||!k.termijnen.length));
+  const ongKosten=kosten.filter(k=>!k.finId&&!arr(k.termijnen).some(t=>!t.factuurId));
   const ongTermijnen=allTermijnenFlat.filter(t=>!t.finId);
   const ongSubsidies=subsidieItems.filter(k=>!k.finId);
   const ongKostenAmt=ongKosten.reduce((s,k)=>s+Number(k.bedrag||0),0);
@@ -2424,7 +2434,7 @@ function renderBudget(){
         </div>`;
       }
       // Reguliere bron
-      const gresKosten=kosten.filter(k=>k.finId===f.id&&(!k.termijnen||!k.termijnen.length)).reduce((s,k)=>s+Number(k.bedrag||0),0);
+      const gresKosten=kosten.filter(k=>k.finId===f.id).reduce((s,k)=>{const termTotaal=arr(k.termijnen).reduce((ts,t)=>ts+Number(t.bedrag||0),0);return s+Math.max(0,Number(k.bedrag||0)-termTotaal);},0);
       const gresTermijnen=allTermijnenFlat.filter(t=>t.finId===f.id);
       const gresTermijnenAmt=gresTermijnen.reduce((s,t)=>s+Number(t.bedrag||0),0);
       const betaaldTermijnen=gresTermijnen.filter(t=>t.betaald).reduce((s,t)=>s+Number(t.bedrag||0),0);
@@ -2757,6 +2767,8 @@ function addTermijn(){
   renderTermijnen();
 }
 function removeTermijn(tid){
+  const t=_termijnenTemp.find(x=>x.id===tid);
+  if(t&&t.factuurId){alert('Dit is een factuur-termijn en kan niet handmatig worden verwijderd. Beheer via de factuur.');return;}
   _termijnenTemp=_termijnenTemp.filter(t=>t.id!==tid);
   renderTermijnen();
 }
@@ -2768,8 +2780,16 @@ function renderTermijnen(){
     return;
   }
   const total=_termijnenTemp.reduce((s,t)=>s+Number(t.bedrag)||0,0);
-  el.innerHTML=_termijnenTemp.map((t,i)=>`
-    <div class="termijn-row">
+  el.innerHTML=_termijnenTemp.map((t,i)=>{
+    if(t.factuurId){
+      const fac=arr(S.facturen).find(f=>f.id===t.factuurId);
+      return `<div class="termijn-row" style="opacity:0.65;background:var(--surf2,#f8fafc);cursor:default">
+        <span style="flex:2;font-size:12px;color:var(--mut)">📄 ${esc(t.datum||'—')} &nbsp;${esc(t.omschrijving||'')}</span>
+        <span style="flex:0.8;min-width:72px;font-size:12px;font-weight:600;color:var(--mut)">${fmt(t.bedrag)}</span>
+        <span style="font-size:11px;background:#e0e7ff;color:#3730a3;border-radius:6px;padding:2px 7px;font-weight:600;white-space:nowrap">via factuur${fac?' · '+esc(fac.omschrijving):''}</span>
+      </div>`;
+    }
+    return `<div class="termijn-row">
       <input type="date" value="${t.datum||''}" style="flex:1;min-width:120px" oninput="_termijnenTemp[${i}].datum=this.value">
       <input type="text" value="${esc(t.omschrijving||'')}" placeholder="Omschrijving (bijv. 1e termijn)" style="flex:2;min-width:110px" oninput="_termijnenTemp[${i}].omschrijving=this.value">
       <input type="number" value="${t.bedrag||''}" placeholder="€" style="flex:0.8;min-width:72px" oninput="_termijnenTemp[${i}].bedrag=Number(this.value)||0;updateTermijnTotal()">
@@ -2781,7 +2801,8 @@ function renderTermijnen(){
         <input type="checkbox" ${t.betaald?'checked':''} onchange="_termijnenTemp[${i}].betaald=this.checked" style="margin:0;accent-color:var(--grn)"> Betaald
       </label>
       <button class="ibtn" onclick="removeTermijn('${t.id}')" style="color:var(--red);padding:3px 6px;font-size:14px">✕</button>
-    </div>`).join('')+
+    </div>`;
+  }).join('')+
     `<div id="termijn-total" style="font-size:12px;padding:4px 0;color:var(--mut)">Totaal termijnen: <strong>${fmt(total)}</strong></div>`;
 }
 function updateTermijnTotal(){
@@ -2834,8 +2855,8 @@ function openKostModal(id,rid,type){
     renderLifecycleBtns(k.lifecycle||'raming');
     buildContactDropdown('kost-contact-wrap',k.contactId||'');
     _termijnenTemp=(k.termijnen||[]).map(t=>({...t}));
-    kostTypeChange();
     document.getElementById('kost-fin').value=k.finId||'';
+    kostTypeChange();
     document.getElementById('kost-ontvangen').checked=!!k.ontvangen;
     renderRuimteCheckboxes(k.rids||(k.rid?[{rid:k.rid,pct:100}]:[]));
     updateBtwPreview();
